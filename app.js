@@ -1,202 +1,67 @@
 
 const DB_NAME="acervo-mobile-db", DB_VERSION=1;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
-let db, deferredPrompt=null, referenceFiles=[], conferenceFiles=[];
+let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null;
 
-function requestP(req){return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error)})}
-function store(name,mode="readonly"){return db.transaction(name,mode).objectStore(name)}
-async function all(name){return requestP(store(name).getAll())}
-async function openDB(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){const s=d.createObjectStore("obras",{keyPath:"id",autoIncrement:true});try{s.createIndex("patrimonio","patrimonio",{unique:true})}catch(_){}}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true});};r.onsuccess=e=>res(e.target.result);r.onerror=e=>rej(e.target.error)})}
-function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>el.classList.remove("show"),2400)}
-function esc(v=""){return String(v).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
-function blobUrl(b){return b?URL.createObjectURL(b):""}
-function isStandalone(){return window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone===true}
+function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
+function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
+async function all(n){return requestP(store(n).getAll())}
+async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){const s=d.createObjectStore("obras",{keyPath:"id",autoIncrement:true});try{s.createIndex("patrimonio","patrimonio",{unique:true})}catch(_){}}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
+function toast(m){const e=document.getElementById("toast");e.textContent=m;e.classList.add("show");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.remove("show"),2300)}
+const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+const url=b=>b?URL.createObjectURL(b):"";
+const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 
-function setupNavigation(){
- document.querySelectorAll(".nav").forEach(btn=>btn.onclick=()=>{const v=btn.dataset.view;document.querySelectorAll(".nav").forEach(b=>b.classList.toggle("active",b===btn));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");window.scrollTo({top:0,behavior:"smooth"});if(v==="resultados")renderHistory();});
-}
-function setupDialogs(){
- document.getElementById("newArtworkBtn").onclick=()=>document.getElementById("artworkDialog").showModal();
- document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
-}
-function setupInstall(){
- const btn=document.getElementById("installBtn");
- if(isStandalone()){btn.classList.add("installed");return}
- window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e;btn.textContent="Instalar app";btn.classList.remove("installed")});
- window.addEventListener("appinstalled",()=>{deferredPrompt=null;btn.classList.add("installed");toast("Acervo instalado.");});
- btn.onclick=async()=>{
-   if(deferredPrompt){
-     deferredPrompt.prompt();const choice=await deferredPrompt.userChoice;
-     if(choice.outcome==="accepted"){deferredPrompt=null;btn.classList.add("installed")}
-     return;
-   }
-   const ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
-   document.getElementById("installHelpText").textContent=ios
-    ?"No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”."
-    :"No Chrome, abra o menu ⋮ e escolha “Instalar app” ou “Adicionar à tela inicial”. Se a opção não aparecer, atualize esta página uma vez.";
-   document.getElementById("installHelpDialog").showModal();
- };
-}
+function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{const v=b.dataset.view;document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");if(v==="resultados")renderHistory();window.scrollTo({top:0,behavior:"smooth"})})}
+function setupDialogs(){newArtworkBtn.onclick=()=>artworkDialog.showModal();document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close())}
+function setupInstall(){if(standalone())installBtn.classList.add("installed");window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});window.addEventListener("appinstalled",()=>installBtn.classList.add("installed"));installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;return}installHelpText.textContent=/iphone|ipad|ipod/i.test(navigator.userAgent)?"No Safari: Compartilhar → Adicionar à Tela de Início.":"No Chrome: menu ⋮ → Instalar app / Adicionar à tela inicial.";installHelpDialog.showModal()}}
+function preview(fs,id){const e=document.getElementById(id);e.innerHTML="";fs.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const n=document.createElement("span");n.textContent=i+1;d.append(im,n);e.append(d)})}
+async function compress(f,max=1400,q=.84){const b=await createImageBitmap(f),k=Math.min(1,max/Math.max(b.width,b.height)),w=Math.round(b.width*k),h=Math.round(b.height*k),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(b,0,0,w,h);b.close?.();return new Promise(r=>c.toBlob(x=>r(x||f),"image/jpeg",q))}
+function setupInputs(){referenceInput.onchange=async()=>{referenceFiles=[];for(const f of [...referenceInput.files].slice(0,8))if(f.type.startsWith("image/"))referenceFiles.push(await compress(f));preview(referenceFiles,"referencePreview")};conferenceInput.onchange=async()=>{conferenceFiles=[];for(const f of [...conferenceInput.files].slice(0,7))if(f.type.startsWith("image/"))conferenceFiles.push(await compress(f));preview(conferenceFiles,"conferencePreview");runConferenceBtn.disabled=!conferenceFiles.length;clearConferenceBtn.classList.toggle("hidden",!conferenceFiles.length)};clearConferenceBtn.onclick=clearConference;runConferenceBtn.onclick=runConference}
+function clearConference(){conferenceFiles=[];conferenceInput.value="";conferencePreview.innerHTML="";runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden")}
 
-function preview(files,targetId){
- const el=document.getElementById(targetId);el.innerHTML="";
- files.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=document.createElement("img");im.src=blobUrl(f);const n=document.createElement("span");n.textContent=i+1;d.append(im,n);el.appendChild(d)});
-}
+async function renderArtworks(){let a=(await all("obras")).sort((x,y)=>y.id-x.id),q=searchInput.value.toLowerCase().trim();statArtworks.textContent=a.length;statRefs.textContent=a.reduce((s,o)=>s+(o.fotos?.length||0),0);if(q)a=a.filter(o=>[o.nome,o.patrimonio,o.artista,o.localizacao].join(" ").toLowerCase().includes(q));artworkList.innerHTML="";emptyArtworks.classList.toggle("hidden",a.length>0);a.forEach(o=>{const c=document.createElement("div");c.className="art-card";const im=new Image;if(o.fotos?.[0])im.src=url(o.fotos[0]);const m=document.createElement("div");m.className="art-main";m.innerHTML=`<b>${esc(o.nome)}</b><div class=meta>${esc(o.patrimonio)} · ${esc(o.artista||"-")}</div><div class=meta>${esc(o.localizacao||"-")} · ${o.fotos?.length||0} foto(s)</div>`;c.append(im,m);artworkList.append(c)})}
+artworkForm.onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),p=(f.get("patrimonio")||"").trim(),n=(f.get("nome")||"").trim();if((await all("obras")).some(o=>String(o.patrimonio).toLowerCase()===p.toLowerCase()))return toast("Patrimônio já cadastrado.");const ds=[];toast("Analisando referências…");for(const x of referenceFiles)ds.push(await extractSet(x));await requestP(store("obras","readwrite").add({patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),fotos:[...referenceFiles],descriptors:ds,criadoEm:new Date().toISOString()}));e.target.reset();referenceFiles=[];referencePreview.innerHTML="";artworkDialog.close();renderArtworks();toast("Obra cadastrada.")};
 
-async function compressImage(file,maxSide=1400,quality=.84){
- const b=await createImageBitmap(file);
- const scale=Math.min(1,maxSide/Math.max(b.width,b.height));
- const w=Math.max(1,Math.round(b.width*scale)),h=Math.max(1,Math.round(b.height*scale));
- const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(b,0,0,w,h);b.close?.();
- return new Promise(resolve=>c.toBlob(blob=>resolve(blob||file),"image/jpeg",quality));
+async function ensureDescriptors(ws){for(const o of ws)if(!Array.isArray(o.descriptors)||o.descriptors.length!==(o.fotos?.length||0)||o.descriptors.some(x=>!x?.full)){o.descriptors=[];for(const f of o.fotos||[])o.descriptors.push(await extractSet(f));await requestP(store("obras","readwrite").put(o))}}
+function prog(d,t,txt){progressWrap.classList.remove("hidden");progressBar.style.width=`${Math.round(d/Math.max(1,t)*100)}%`;progressText.textContent=txt}
+async function runConference(){const ws=await all("obras"),refs=ws.filter(o=>(o.fotos?.length||0)>0);if(!refs.length)return toast("Cadastre ao menos uma obra com foto.");runConferenceBtn.disabled=true;runConferenceBtn.textContent="Analisando…";await ensureDescriptors(refs);const items=[];for(let i=0;i<conferenceFiles.length;i++){prog(i,conferenceFiles.length,`Analisando imagem ${i+1} de ${conferenceFiles.length}…`);const q=await extractSet(conferenceFiles[i]),cs=[];for(const o of refs){let best=0;for(const r of o.descriptors||[])best=Math.max(best,setSim(q,r));cs.push({obraId:o.id,nome:o.nome,patrimonio:o.patrimonio,score:best})}cs.sort((a,b)=>b.score-a.score);const top=cs[0],second=cs[1],margin=second?top.score-second.score:top.score,ok=top&&top.score>=AUTO_THRESHOLD&&(cs.length===1||margin>=MIN_MARGIN);items.push({ordem:i+1,foto:conferenceFiles[i],status:ok?"localizado":"pendente",obraId:ok?top.obraId:null,score:top?.score??null,candidatos:cs.slice(0,3),observacao:ok?`Correspondência automática com ${top.nome}.`:(top?.score>=REVIEW_THRESHOLD?`Possível correspondência com ${top.nome}.`:"Nenhuma correspondência segura.")});await new Promise(r=>setTimeout(r,0))}prog(conferenceFiles.length,conferenceFiles.length,"Concluído.");const id=await requestP(store("conferencias","readwrite").add({criadoEm:new Date().toISOString(),items}));clearConference();runConferenceBtn.textContent="Iniciar conferência";progressWrap.classList.add("hidden");renderHistory();openResult(id)}
+
+async function renderHistory(){const cs=(await all("conferencias")).sort((a,b)=>b.id-a.id);historyList.innerHTML="";emptyHistory.classList.toggle("hidden",cs.length>0);cs.forEach(c=>{const l=c.items.filter(i=>i.status==="localizado").length,p=c.items.length-l,card=document.createElement("div");card.className="history-card";card.innerHTML=`<div class=history-main><div class=history-top><b>Conferência #${c.id}</b><span class="status ${p?"pending":"ok"}">${p} pendente(s)</span></div><div class=meta>${new Date(c.criadoEm).toLocaleString("pt-BR")} · ${l} localizada(s)</div></div><div class=mini-actions><button class=mini-delete data-del="${c.id}">Excluir</button></div>`;card.querySelector(".history-main").onclick=()=>openResult(c.id);card.querySelector("[data-del]").onclick=e=>{e.stopPropagation();deleteConference(c.id)};historyList.append(card)})}
+async function deleteConference(id){if(!confirm("Excluir esta conferência?"))return;await requestP(store("conferencias","readwrite").delete(id));if(resultDialog.open)resultDialog.close();renderHistory();toast("Conferência excluída.")}
+async function resetAll(){if(!confirm("Excluir TODAS as conferências? O acervo cadastrado será mantido."))return;await requestP(store("conferencias","readwrite").clear());renderHistory();toast("Conferências zeradas.")}
+async function confirmCandidate(cid,idx,oid){const c=await requestP(store("conferencias").get(cid));c.items[idx].status="localizado";c.items[idx].obraId=oid;c.items[idx].observacao="Confirmado manualmente.";await requestP(store("conferencias","readwrite").put(c));renderHistory();openResult(cid)}
+
+async function openResult(id){currentConferenceId=id;const c=await requestP(store("conferencias").get(id)),ws=await all("obras"),mp=new Map(ws.map(o=>[o.id,o])),l=c.items.filter(i=>i.status==="localizado").length;resultTitle.textContent=`Conferência #${id}`;resultSummary.innerHTML=`<div class=stat><b>${l}</b><span>localizadas</span></div><div class=stat><b>${c.items.length-l}</b><span>pendentes</span></div>`;resultItems.innerHTML="";c.items.forEach((it,idx)=>{const d=document.createElement("div");d.className="result-item";const im=new Image;im.src=url(it.foto);const t=document.createElement("div"),o=it.obraId?mp.get(it.obraId):null;let h=`<span class="status ${it.status==="localizado"?"ok":"pending"}">${it.status==="localizado"?"LOCALIZADA":"PENDENTE"}</span>`+ (o?`<h4>${esc(o.nome)}</h4><p><b>Patrimônio:</b> ${esc(o.patrimonio)}</p><p>${esc(o.artista||"-")} · ${esc(o.localizacao||"-")}</p>`:`<h4>Imagem ${it.ordem||idx+1}</h4>`);if(it.score!=null)h+=`<p><b>Similaridade:</b> ${(it.score*100).toFixed(1)}%</p>`;if(it.status!=="localizado"&&it.candidatos?.length)h+=`<div class=candidate-box><b>Melhores candidatos</b>`+it.candidatos.map((x,j)=>`<div class=candidate><span>${j+1}. ${esc(x.nome)} · ${esc(x.patrimonio)}<br><small>${(x.score*100).toFixed(1)}%</small></span><button class=confirm data-c="${id}|${idx}|${x.obraId}">Confirmar</button></div>`).join("")+`</div>`;t.innerHTML=h;d.append(im,t);resultItems.append(d)});resultItems.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{const [c,i,o]=b.dataset.c.split("|").map(Number);confirmCandidate(c,i,o)});exportCurrentCsvBtn.onclick=()=>exportCsv(id);deleteCurrentBtn.onclick=()=>deleteConference(id);if(!resultDialog.open)resultDialog.showModal()}
+
+/* CSV: 1 linha por obra no período. As "fotos na mesma linha" são listadas como nomes Foto 1, Foto 2... + quantidade.
+   CSV não incorpora binários de imagem. O backup JSON mantém as imagens. */
+function csvCell(v){const s=String(v??"").replaceAll('"','""');return `"${s}"`}
+async function exportCsv(confId=null){
+ const works=(await all("obras")).sort((a,b)=>String(a.patrimonio).localeCompare(String(b.patrimonio))),confs=(await all("conferencias")).sort((a,b)=>b.id-a.id),c=confId?confs.find(x=>x.id===confId):confs[0];
+ if(!c)return toast("Nenhuma conferência para exportar.");
+ const foundBy=new Map();c.items.forEach((it,idx)=>{if(it.obraId){const prev=foundBy.get(it.obraId);if(!prev||((it.score||0)>(prev.score||0)))foundBy.set(it.obraId,{...it,leitura:idx+1})}});
+ const header=["Conferencia","Data da conferencia","Patrimonio","Nome da obra","Artista","Localizacao","Descricao","Qtd fotos referencia","Fotos referencia","Encontrada no periodo","Leitura","Similaridade"];
+ const rows=[header.map(csvCell).join(";")];
+ for(const o of works){const f=foundBy.get(o.id),fotoTxt=(o.fotos||[]).map((_,i)=>`Foto ${i+1}`).join(" | ");rows.push([c.id,new Date(c.criadoEm).toLocaleString("pt-BR"),o.patrimonio,o.nome,o.artista||"",o.localizacao||"",o.descricao||"",o.fotos?.length||0,fotoTxt,f?"SIM":"NÃO",f?.leitura||"",f?.score!=null?(f.score*100).toFixed(1)+"%":""].map(csvCell).join(";"))}
+ const blob=new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-conferencia-${c.id}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");
 }
 
-function setupInputs(){
- const ref=document.getElementById("referenceInput"),conf=document.getElementById("conferenceInput");
- ref.onchange=async()=>{const raw=[...ref.files].filter(f=>f.type.startsWith("image/")).slice(0,8);referenceFiles=[];toast("Preparando fotos…");for(const f of raw)referenceFiles.push(await compressImage(f));preview(referenceFiles,"referencePreview")};
- conf.onchange=async()=>{const raw=[...conf.files].filter(f=>f.type.startsWith("image/")).slice(0,7);if(conf.files.length>7)toast("Foram consideradas apenas as 7 primeiras imagens.");conferenceFiles=[];for(const f of raw)conferenceFiles.push(await compressImage(f));preview(conferenceFiles,"conferencePreview");document.getElementById("runConferenceBtn").disabled=!conferenceFiles.length;document.getElementById("clearConferenceBtn").classList.toggle("hidden",!conferenceFiles.length)};
- document.getElementById("clearConferenceBtn").onclick=clearConference;
- document.getElementById("runConferenceBtn").onclick=runConference;
-}
-function clearConference(){conferenceFiles=[];document.getElementById("conferenceInput").value="";document.getElementById("conferencePreview").innerHTML="";document.getElementById("runConferenceBtn").disabled=true;document.getElementById("clearConferenceBtn").classList.add("hidden")}
-
-async function renderArtworks(){
- let items=(await all("obras")).sort((a,b)=>b.id-a.id);
- const q=document.getElementById("searchInput").value.toLowerCase().trim();
- document.getElementById("statArtworks").textContent=items.length;
- document.getElementById("statRefs").textContent=items.reduce((s,o)=>s+(o.fotos?.length||0),0);
- if(q)items=items.filter(o=>[o.nome,o.patrimonio,o.artista,o.localizacao].join(" ").toLowerCase().includes(q));
- const list=document.getElementById("artworkList");list.innerHTML="";
- document.getElementById("emptyArtworks").classList.toggle("hidden",items.length>0);
- items.forEach(o=>{const card=document.createElement("div");card.className="art-card";const im=document.createElement("img");if(o.fotos?.[0])im.src=blobUrl(o.fotos[0]);const m=document.createElement("div");m.className="art-main";m.innerHTML=`<b>${esc(o.nome)}</b><div class="meta">${esc(o.patrimonio)} · ${esc(o.artista||"Artista não informado")}</div><div class="meta">${esc(o.localizacao||"Localização não informada")} · ${o.fotos?.length||0} foto(s)</div>`;card.append(im,m);list.appendChild(card)});
-}
-async function saveArtwork(e){
- e.preventDefault();const fd=new FormData(e.target),pat=(fd.get("patrimonio")||"").trim(),nome=(fd.get("nome")||"").trim();
- if(!pat||!nome)return toast("Patrimônio e nome são obrigatórios.");
- const existing=await all("obras");if(existing.some(o=>String(o.patrimonio).toLowerCase()===pat.toLowerCase()))return toast("Esse patrimônio já está cadastrado.");
- const descriptors=[];toast("Analisando referências…");
- for(const f of referenceFiles)descriptors.push(await extractDescriptorSet(f));
- await requestP(store("obras","readwrite").add({patrimonio:pat,nome,artista:(fd.get("artista")||"").trim(),localizacao:(fd.get("localizacao")||"").trim(),descricao:(fd.get("descricao")||"").trim(),fotos:[...referenceFiles],descriptors,criadoEm:new Date().toISOString()}));
- e.target.reset();referenceFiles=[];document.getElementById("referencePreview").innerHTML="";document.getElementById("artworkDialog").close();await renderArtworks();toast("Obra cadastrada.");
-}
-async function ensureDescriptors(works){
- for(const o of works){
-   if(!Array.isArray(o.descriptors)||o.descriptors.length!==(o.fotos?.length||0)||o.descriptors.some(x=>!x?.full)){
-     o.descriptors=[];for(const f of (o.fotos||[]))o.descriptors.push(await extractDescriptorSet(f));await requestP(store("obras","readwrite").put(o));
-   }
- }
-}
-
-function progress(done,total,text){
- const wrap=document.getElementById("progressWrap"),bar=document.getElementById("progressBar"),label=document.getElementById("progressText");
- wrap.classList.remove("hidden");bar.style.width=`${Math.round(done/Math.max(1,total)*100)}%`;label.textContent=text;
-}
-
-async function runConference(){
- if(!conferenceFiles.length)return;
- const works=await all("obras"),refs=works.filter(o=>(o.fotos?.length||0)>0);
- if(!refs.length)return toast("Cadastre ao menos uma obra com foto de referência.");
- const btn=document.getElementById("runConferenceBtn");btn.disabled=true;btn.textContent="Analisando…";
- progress(0,conferenceFiles.length,"Preparando referências…");await ensureDescriptors(refs);
- const items=[];
- for(let i=0;i<conferenceFiles.length;i++){
-   progress(i,conferenceFiles.length,`Analisando imagem ${i+1} de ${conferenceFiles.length}…`);
-   const q=await extractDescriptorSet(conferenceFiles[i]),candidates=[];
-   for(const o of refs){
-     let best=0;
-     for(const r of (o.descriptors||[])){if(!r)continue;best=Math.max(best,setSimilarity(q,r))}
-     candidates.push({obraId:o.id,nome:o.nome,patrimonio:o.patrimonio,artista:o.artista||"",localizacao:o.localizacao||"",score:best});
-   }
-   candidates.sort((a,b)=>b.score-a.score);
-   const top=candidates[0],second=candidates[1],margin=second?top.score-second.score:top.score;
-   const located=top&&top.score>=AUTO_THRESHOLD&&(candidates.length===1||margin>=MIN_MARGIN);
-   items.push({ordem:i+1,foto:conferenceFiles[i],status:located?"localizado":"pendente",obraId:located?top.obraId:null,score:top?.score??null,candidatos:candidates.slice(0,3),observacao:located?`Correspondência automática com ${top.nome}.`:(top?.score>=REVIEW_THRESHOLD?`Possível correspondência com ${top.nome}. Revise os candidatos.`:"Nenhuma correspondência visual segura.")});
-   await new Promise(r=>setTimeout(r,0));
- }
- progress(conferenceFiles.length,conferenceFiles.length,"Concluído.");
- const id=await requestP(store("conferencias","readwrite").add({criadoEm:new Date().toISOString(),items}));
- clearConference();btn.textContent="Iniciar conferência";document.getElementById("progressWrap").classList.add("hidden");await renderHistory();await openResult(id);toast("Conferência concluída.");
-}
-
-async function renderHistory(){
- const items=(await all("conferencias")).sort((a,b)=>b.id-a.id),list=document.getElementById("historyList");list.innerHTML="";
- document.getElementById("emptyHistory").classList.toggle("hidden",items.length>0);
- items.forEach(c=>{const loc=c.items.filter(i=>i.status==="localizado").length,pend=c.items.length-loc,b=document.createElement("button");b.className="history-card";b.innerHTML=`<div class="history-main"><div class="history-top"><b>Conferência #${c.id}</b><span class="status ${pend?"pending":"ok"}">${pend} pendente(s)</span></div><div class="meta">${new Date(c.criadoEm).toLocaleString("pt-BR")} · ${c.items.length} imagem(ns) · ${loc} localizada(s)</div></div><span>›</span>`;b.onclick=()=>openResult(c.id);list.appendChild(b)});
-}
-async function confirmCandidate(confId,itemIndex,obraId){
- const c=await requestP(store("conferencias").get(confId));if(!c)return;c.items[itemIndex].status="localizado";c.items[itemIndex].obraId=obraId;c.items[itemIndex].observacao="Confirmado manualmente.";await requestP(store("conferencias","readwrite").put(c));await renderHistory();await openResult(confId);toast("Correspondência confirmada.");
-}
-async function openResult(id){
- const c=await requestP(store("conferencias").get(id));if(!c)return;const works=await all("obras"),map=new Map(works.map(o=>[o.id,o]));const loc=c.items.filter(i=>i.status==="localizado").length;
- document.getElementById("resultTitle").textContent=`Conferência #${id}`;document.getElementById("resultSummary").innerHTML=`<div class="stat"><b>${loc}</b><span>localizadas</span></div><div class="stat"><b>${c.items.length-loc}</b><span>pendentes</span></div>`;
- const wrap=document.getElementById("resultItems");wrap.innerHTML="";
- c.items.forEach((it,index)=>{const d=document.createElement("div");d.className="result-item";const im=document.createElement("img");im.src=blobUrl(it.foto);const t=document.createElement("div"),o=it.obraId?map.get(it.obraId):null;
-   let html=`<span class="status ${it.status==="localizado"?"ok":"pending"}">${it.status==="localizado"?"LOCALIZADA":"PENDENTE"}</span>`;
-   html+=o?`<h4>${esc(o.nome)}</h4><p><b>Patrimônio:</b> ${esc(o.patrimonio)}</p><p>${esc(o.artista||"-")} · ${esc(o.localizacao||"-")}</p>`:`<h4>Imagem ${it.ordem||index+1}</h4>`;
-   if(it.score!=null)html+=`<p><b>Similaridade visual:</b> ${(it.score*100).toFixed(1)}%</p>`;
-   html+=`<p>${esc(it.observacao||"")}</p>`;
-   if(it.status!=="localizado"&&Array.isArray(it.candidatos)&&it.candidatos.length){html+=`<div class="candidate-box"><b>Melhores candidatos</b>`+it.candidatos.map((x,j)=>`<div class="candidate"><span>${j+1}. ${esc(x.nome)} · ${esc(x.patrimonio)}<br><small>${(x.score*100).toFixed(1)}%</small></span><button class="confirm" data-confirm="${id}|${index}|${x.obraId}">Confirmar</button></div>`).join("")+`</div>`}
-   t.innerHTML=html;d.append(im,t);wrap.appendChild(d);
- });
- wrap.querySelectorAll("[data-confirm]").forEach(b=>b.onclick=()=>{const [cid,idx,oid]=b.dataset.confirm.split("|").map(Number);confirmCandidate(cid,idx,oid)});
- const dlg=document.getElementById("resultDialog");if(!dlg.open)dlg.showModal();
-}
-
-/* Motor visual local leve: duas leituras (imagem completa + recorte central) */
-async function bitmap(file){return createImageBitmap(file)}
-function canvasVariant(b,size,mode){
- const c=document.createElement("canvas");c.width=c.height=size;const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,size,size);
- if(mode==="crop"){const s=Math.min(b.width,b.height),sx=(b.width-s)/2,sy=(b.height-s)/2;x.drawImage(b,sx,sy,s,s,0,0,size,size)}
- else{const k=Math.min(size/b.width,size/b.height),w=b.width*k,h=b.height*k;x.drawImage(b,(size-w)/2,(size-h)/2,w,h)}
- return c;
-}
-function gray(data){const a=[];for(let i=0;i<data.length;i+=4)a.push((.299*data[i]+.587*data[i+1]+.114*data[i+2])/255);return a}
-function avg(a){return a.reduce((s,x)=>s+x,0)/Math.max(1,a.length)}
-function sd(a,m){return Math.sqrt(a.reduce((s,x)=>s+(x-m)*(x-m),0)/Math.max(1,a.length))}
-function ahash(g){const m=avg(g);return g.map(x=>x>=m?1:0).join("")}
-function hist(data,bins=8){const h=new Array(bins*3).fill(0);for(let i=0;i<data.length;i+=4){h[Math.min(bins-1,Math.floor(data[i]/256*bins))]++;h[bins+Math.min(bins-1,Math.floor(data[i+1]/256*bins))]++;h[2*bins+Math.min(bins-1,Math.floor(data[i+2]/256*bins))]++}const n=Math.sqrt(h.reduce((s,x)=>s+x*x,0))||1;return h.map(x=>x/n)}
-function norm(a){const m=avg(a),s=sd(a,m)||1;return a.map(x=>(x-m)/s)}
-function edge(g,size){const v=[];for(let y=1;y<size-1;y+=2)for(let x=1;x<size-1;x+=2){const gx=g[y*size+x+1]-g[y*size+x-1],gy=g[(y+1)*size+x]-g[(y-1)*size+x];v.push(Math.hypot(gx,gy))}const n=Math.sqrt(v.reduce((s,x)=>s+x*x,0))||1;return v.map(x=>x/n)}
-function singleDescriptor(b,mode){
- const c=canvasVariant(b,32,mode),data=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,32,32).data,g=gray(data);
- const c8=canvasVariant(b,8,mode),g8=gray(c8.getContext("2d",{willReadFrequently:true}).getImageData(0,0,8,8).data);
- return {hash:ahash(g8),gray:norm(g),hist:hist(data),edge:edge(g,32)};
-}
-async function extractDescriptorSet(file){const b=await bitmap(file);const r={full:singleDescriptor(b,"fit"),crop:singleDescriptor(b,"crop")};b.close?.();return r}
-function ham(a,b){if(!a||!b||a.length!==b.length)return 0;let s=0;for(let i=0;i<a.length;i++)if(a[i]===b[i])s++;return s/a.length}
-function cos(a,b){if(!a||!b||a.length!==b.length)return 0;let d=0,x=0,y=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return (!x||!y)?0:Math.max(-1,Math.min(1,d/Math.sqrt(x*y)))}
-function descriptorSimilarity(a,b){const h=ham(a.hash,b.hash),c=Math.max(0,cos(a.hist,b.hist)),g=(cos(a.gray,b.gray)+1)/2,e=Math.max(0,cos(a.edge,b.edge));return .22*h+.25*c+.31*g+.22*e}
-function setSimilarity(a,b){return Math.max(descriptorSimilarity(a.full,b.full),descriptorSimilarity(a.full,b.crop),descriptorSimilarity(a.crop,b.full),descriptorSimilarity(a.crop,b.crop))}
+/* Motor visual */
+async function bmp(f){return createImageBitmap(f)}function canv(b,s,mode){const c=document.createElement("canvas");c.width=c.height=s;const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,s,s);if(mode==="crop"){const q=Math.min(b.width,b.height),sx=(b.width-q)/2,sy=(b.height-q)/2;x.drawImage(b,sx,sy,q,q,0,0,s,s)}else{const k=Math.min(s/b.width,s/b.height),w=b.width*k,h=b.height*k;x.drawImage(b,(s-w)/2,(s-h)/2,w,h)}return c}
+function gray(d){const a=[];for(let i=0;i<d.length;i+=4)a.push((.299*d[i]+.587*d[i+1]+.114*d[i+2])/255);return a}function avg(a){return a.reduce((s,x)=>s+x,0)/a.length}function sd(a,m){return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length)}function ah(g){const m=avg(g);return g.map(x=>x>=m?1:0).join("")}function norm(a){const m=avg(a),s=sd(a,m)||1;return a.map(x=>(x-m)/s)}
+function hist(d,n=8){const h=new Array(n*3).fill(0);for(let i=0;i<d.length;i+=4){h[Math.min(n-1,Math.floor(d[i]/256*n))]++;h[n+Math.min(n-1,Math.floor(d[i+1]/256*n))]++;h[2*n+Math.min(n-1,Math.floor(d[i+2]/256*n))]++}const q=Math.sqrt(h.reduce((s,x)=>s+x*x,0))||1;return h.map(x=>x/q)}
+function edge(g,s){const v=[];for(let y=1;y<s-1;y+=2)for(let x=1;x<s-1;x+=2)v.push(Math.hypot(g[y*s+x+1]-g[y*s+x-1],g[(y+1)*s+x]-g[(y-1)*s+x]));const n=Math.sqrt(v.reduce((a,x)=>a+x*x,0))||1;return v.map(x=>x/n)}
+function one(b,m){const c=canv(b,32,m),d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,32,32).data,g=gray(d),c8=canv(b,8,m),g8=gray(c8.getContext("2d",{willReadFrequently:true}).getImageData(0,0,8,8).data);return{hash:ah(g8),gray:norm(g),hist:hist(d),edge:edge(g,32)}}
+async function extractSet(f){const b=await bmp(f),r={full:one(b,"fit"),crop:one(b,"crop")};b.close?.();return r}
+function ham(a,b){let s=0;for(let i=0;i<a.length;i++)if(a[i]===b[i])s++;return s/a.length}function cos(a,b){let d=0,x=0,y=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return d/Math.sqrt(x*y)}
+function sim(a,b){return .22*ham(a.hash,b.hash)+.25*Math.max(0,cos(a.hist,b.hist))+.31*((cos(a.gray,b.gray)+1)/2)+.22*Math.max(0,cos(a.edge,b.edge))}
+function setSim(a,b){return Math.max(sim(a.full,b.full),sim(a.full,b.crop),sim(a.crop,b.full),sim(a.crop,b.crop))}
 
 /* Backup */
-function blobToDataURL(blob){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r.readAsDataURL(blob)})}
-function dataURLToBlob(url){const [head,data]=url.split(","),mime=(head.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(data),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:mime})}
-async function serializeArtwork(o){const x={...o};x.fotos=[];for(const f of (o.fotos||[]))x.fotos.push(await blobToDataURL(f));return x}
-async function serializeConference(c){const x={...c,items:[]};for(const it of c.items){const y={...it,foto:it.foto?await blobToDataURL(it.foto):null};x.items.push(y)}return x}
-async function exportBackup(){
- toast("Preparando backup…");const obras=[],confs=[];for(const o of await all("obras"))obras.push(await serializeArtwork(o));for(const c of await all("conferencias"))confs.push(await serializeConference(c));
- const blob=new Blob([JSON.stringify({version:"0.3.1",createdAt:new Date().toISOString(),obras,conferencias:confs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Backup exportado.");
-}
-async function importBackup(file){
- const data=JSON.parse(await file.text());if(!Array.isArray(data.obras)||!Array.isArray(data.conferencias))throw new Error("Backup inválido");
- const t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of data.obras){o.fotos=(o.fotos||[]).map(dataURLToBlob);s1.put(o)}await new Promise((res,rej)=>{t1.oncomplete=res;t1.onerror=()=>rej(t1.error)});
- const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of data.conferencias){for(const it of c.items)if(typeof it.foto==="string")it.foto=dataURLToBlob(it.foto);s2.put(c)}await new Promise((res,rej)=>{t2.oncomplete=res;t2.onerror=()=>rej(t2.error)});
- await renderArtworks();await renderHistory();toast("Backup restaurado.");
-}
-function setupBackup(){
- document.getElementById("exportBtn").onclick=exportBackup;
- document.getElementById("importBtn").onclick=()=>document.getElementById("importFile").click();
- document.getElementById("importFile").onchange=async e=>{if(!e.target.files[0])return;try{await importBackup(e.target.files[0])}catch(err){console.error(err);toast("Não foi possível importar esse backup.")}e.target.value=""};
-}
+function toData(b){return new Promise((a,z)=>{const r=new FileReader;r.onload=()=>a(r.result);r.onerror=()=>z(r.error);r.readAsDataURL(b)})}function fromData(u){const [h,d]=u.split(","),m=(h.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(d),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:m})}
+async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.4",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();toast("Backup exportado.")}
+async function importBackup(f){const d=JSON.parse(await f.text()),t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
+function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
-async function boot(){
- db=await openDB();setupNavigation();setupDialogs();setupInstall();setupInputs();setupBackup();
- document.getElementById("artworkForm").addEventListener("submit",saveArtwork);
- document.getElementById("searchInput").addEventListener("input",renderArtworks);
- await renderArtworks();await renderHistory();
- if("serviceWorker" in navigator){
-   navigator.serviceWorker.register("./sw.js").then(reg=>reg.update()).catch(console.warn);
-   let refreshing=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(refreshing)return;refreshing=true;location.reload()});
- }
-}
-boot().catch(e=>{console.error(e);toast("Erro ao iniciar o aplicativo.")});
+(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();

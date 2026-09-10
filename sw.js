@@ -1,14 +1,1 @@
-
-const CACHE="acervo-v0.3.1";
-const CORE=["./","./index.html","./style.css","./app.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];
-self.addEventListener("install",event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)))});
-self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
-self.addEventListener("fetch",event=>{
- if(event.request.method!=="GET")return;
- const u=new URL(event.request.url);
- if(event.request.mode==="navigate"||u.pathname.endsWith("/app.js")||u.pathname.endsWith("/style.css")||u.pathname.endsWith("/manifest.webmanifest")){
-   event.respondWith(fetch(event.request,{cache:"no-store"}).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(c=>c.put(event.request,copy));return resp}).catch(()=>caches.match(event.request).then(r=>r||caches.match("./index.html"))));
- }else{
-   event.respondWith(caches.match(event.request).then(r=>r||fetch(event.request).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(c=>c.put(event.request,copy));return resp})));
- }
-});
+const C="acervo-v0.4";const A=["./","./index.html","./style.css","./app.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(A)))});self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;const u=new URL(e.request.url),fresh=e.request.mode==="navigate"||/app\.js$|style\.css$|manifest\.webmanifest$/.test(u.pathname);e.respondWith((fresh?fetch(e.request,{cache:"no-store"}):caches.match(e.request).then(r=>r||fetch(e.request))).then(r=>{const q=r.clone();caches.open(C).then(c=>c.put(e.request,q));return r}).catch(()=>caches.match("./index.html")))})

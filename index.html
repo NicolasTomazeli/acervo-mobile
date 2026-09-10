@@ -3,27 +3,30 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#082F63">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Acervo">
-  <title>Acervo — Controle de Obras</title>
+  <meta name="apple-mobile-web-app-title" content="Acervo LBV">
+  <title>Acervo LBV</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 <header class="topbar">
-  <div><div class="eyebrow">CONTROLE DE OBRAS</div><h1>Acervo</h1></div>
+  <div class="brandmark">
+    <div class="brand-dot">LBV</div>
+    <div><div class="eyebrow">CONTROLE DE OBRAS</div><h1>Acervo LBV</h1></div>
+  </div>
   <button id="installBtn" class="install-btn">Instalar app</button>
 </header>
 
 <main>
   <section id="view-acervo" class="view active">
-    <div class="hero">
+    <div class="hero brand-hero">
       <span class="pill">Base local</span>
       <h2>Seu acervo no celular</h2>
-      <p>Cadastre obras e fotos de referência para a identificação visual.</p>
+      <p>Cadastre obras e fotos de referência para identificação visual.</p>
       <button id="newArtworkBtn" class="primary">+ Nova obra</button>
     </div>
 
@@ -44,7 +47,7 @@
     <div class="hero">
       <span class="pill">1 a 7 imagens</span>
       <h2>Nova conferência</h2>
-      <p>Escolha imagens da galeria ou tire fotos. O processamento acontece no próprio aparelho.</p>
+      <p>Tire fotos ou escolha imagens da galeria. O processamento acontece no aparelho.</p>
     </div>
 
     <div class="card">
@@ -59,19 +62,20 @@
         <div id="progressText" class="muted">Preparando…</div>
       </div>
     </div>
-
-    <div class="info">
-      <b>Como o MVP decide</b>
-      <p>Correspondência visual forte e claramente acima do segundo candidato → <b>Localizada</b>. Caso contrário → <b>Pendente</b>, mostrando os melhores candidatos para revisão.</p>
-    </div>
   </section>
 
   <section id="view-resultados" class="view">
     <div class="hero compact">
-      <span class="pill">Histórico</span>
-      <h2>Resultados</h2>
-      <p>Abra uma conferência para revisar o que foi localizado e o que ficou pendente.</p>
+      <span class="pill">Períodos</span>
+      <h2>Conferências</h2>
+      <p>Abra um período para revisar os resultados ou exportar seu relatório.</p>
     </div>
+
+    <div class="toolbar">
+      <button id="exportLatestBtn" class="primary">Exportar último período</button>
+      <button id="resetAllBtn" class="danger">Excluir todas</button>
+    </div>
+
     <div id="historyList" class="list"></div>
     <div id="emptyHistory" class="empty">Nenhuma conferência realizada.</div>
   </section>
@@ -80,20 +84,28 @@
     <div class="hero compact">
       <span class="pill">Segurança</span>
       <h2>Ajustes</h2>
-      <p>Ferramentas úteis para não perder seu acervo durante os testes.</p>
+      <p>Backup e manutenção do acervo.</p>
     </div>
+
     <div class="card">
-      <h3>Backup local</h3>
-      <p class="muted">Exporte um arquivo com cadastros, fotos e histórico. Use antes de limpar dados do navegador ou trocar de aparelho.</p>
+      <h3>Backup completo</h3>
+      <p class="muted">Mantém obras, imagens e conferências para restauração futura.</p>
       <div class="actions">
         <button id="exportBtn" class="primary grow">Exportar backup</button>
         <button id="importBtn" class="secondary grow">Importar backup</button>
       </div>
       <input id="importFile" type="file" accept="application/json,.json" hidden>
     </div>
+
+    <div class="card">
+      <h3>Relatório CSV</h3>
+      <p class="muted">Gera uma planilha do último período com uma linha por obra, incluindo dados cadastrais, status, data da leitura e nomes das fotos de referência.</p>
+      <button id="exportCsvBtn" class="primary full">Exportar CSV do último período</button>
+    </div>
+
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.3.1</b> — PWA instalável + reconhecimento visual local + revisão manual.</p>
+      <p class="muted">Acervo Mobile <b>0.4</b> — tema LBV + relatório + exclusão de períodos.</p>
     </div>
   </section>
 </main>
@@ -107,7 +119,10 @@
 
 <dialog id="artworkDialog">
   <form id="artworkForm" class="dialog-card">
-    <div class="dialog-head"><div><span class="pill">Referência</span><h2>Nova obra</h2></div><button type="button" class="x" data-close="artworkDialog">✕</button></div>
+    <div class="dialog-head">
+      <div><span class="pill">Referência</span><h2>Nova obra</h2></div>
+      <button type="button" class="x" data-close="artworkDialog">✕</button>
+    </div>
     <label>Patrimônio *</label><input name="patrimonio" required>
     <label>Nome da obra *</label><input name="nome" required>
     <label>Artista</label><input name="artista">
@@ -116,14 +131,24 @@
     <label>Fotos de referência</label><input id="referenceInput" type="file" accept="image/*" capture="environment" multiple>
     <div id="referencePreview" class="preview-grid"></div>
     <p class="muted">Recomendado: 2 ou 3 fotos da obra, com enquadramentos ligeiramente diferentes.</p>
-    <div class="actions sticky"><button type="button" class="secondary" data-close="artworkDialog">Cancelar</button><button class="primary grow" type="submit">Salvar obra</button></div>
+    <div class="actions sticky">
+      <button type="button" class="secondary" data-close="artworkDialog">Cancelar</button>
+      <button class="primary grow" type="submit">Salvar obra</button>
+    </div>
   </form>
 </dialog>
 
 <dialog id="resultDialog">
   <div class="dialog-card">
-    <div class="dialog-head"><div><span class="pill">Conferência</span><h2 id="resultTitle">Resultado</h2></div><button type="button" class="x" data-close="resultDialog">✕</button></div>
+    <div class="dialog-head">
+      <div><span class="pill">Conferência</span><h2 id="resultTitle">Resultado</h2></div>
+      <button type="button" class="x" data-close="resultDialog">✕</button>
+    </div>
     <div id="resultSummary" class="stats"></div>
+    <div class="actions result-actions">
+      <button id="exportCurrentCsvBtn" class="secondary grow">Exportar CSV</button>
+      <button id="deleteCurrentBtn" class="danger grow">Excluir conferência</button>
+    </div>
     <div id="resultItems" class="result-list"></div>
   </div>
 </dialog>

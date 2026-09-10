@@ -1,13 +1,13 @@
 {
   "id": "./",
-  "name": "Acervo — Controle de Obras",
-  "short_name": "Acervo",
-  "description": "Cadastro e conferência visual local de obras de arte.",
+  "name": "Acervo LBV — Controle de Obras",
+  "short_name": "Acervo LBV",
+  "description": "Cadastro e conferência visual de obras.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f4f5f7",
-  "theme_color": "#111827",
+  "background_color": "#F4F7FB",
+  "theme_color": "#082F63",
   "orientation": "portrait-primary",
   "icons": [
     {
