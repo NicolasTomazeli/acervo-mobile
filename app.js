@@ -1,12 +1,12 @@
 
-const DB_NAME="acervo-mobile-db", DB_VERSION=2;
+const DB_NAME="acervo-mobile-db", DB_VERSION=1;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
 let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set();
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
 function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
 async function all(n){return requestP(store(n).getAll())}
-async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){d.createObjectStore("obras",{keyPath:"id",autoIncrement:true})}else{const s=r.transaction.objectStore("obras");if(s.indexNames.contains("patrimonio"))s.deleteIndex("patrimonio")}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
+async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){const s=d.createObjectStore("obras",{keyPath:"id",autoIncrement:true});try{s.createIndex("patrimonio","patrimonio",{unique:true})}catch(_){}}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
 function toast(m){const e=document.getElementById("toast");e.textContent=m;e.classList.add("show");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.remove("show"),2300)}
 const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const url=b=>b?URL.createObjectURL(b):"";
@@ -100,11 +100,9 @@ async function importCatalog(file){
  for(let i=0;i<data.obras.length;i++){
    const x=data.obras[i],pat=String(x.patrimonio||"").trim(),sourceKey=`${data.origem||"importacao"}#${x.linha_excel||i+1}`;
    if((pat&&patrSet.has(pat.toLowerCase()))||sourceSet.has(sourceKey)){skipped++;continue}
-   const fotos=(x.fotos||[]).map(f=>dataUrlBlob(f.data));
-   let descriptors=Array.isArray(x.descriptors)&&x.descriptors.length===fotos.length?x.descriptors:[];
+   const fotos=(x.fotos||[]).map(f=>dataUrlBlob(f.data)),descriptors=[];
    status.innerHTML=`Importando <strong>${i+1}/${data.obras.length}</strong> · ${added} obra(s) adicionada(s)…`;
-   if(!descriptors.length&&fotos.length){for(const f of fotos){descriptors.push(await extractSet(f));await new Promise(r=>setTimeout(r,0))}}
-   photos+=fotos.length;
+   for(const f of fotos){descriptors.push(await extractSet(f));photos++;await new Promise(r=>setTimeout(r,0))}
    await requestP(store("obras","readwrite").add({patrimonio:pat,nome:x.nome||"Sem título",artista:x.artista||"",localizacao:x.localizacao||"",descricao:x.descricao||"",fotos,descriptors,sourceKey,linhaExcel:x.linha_excel||null,criadoEm:new Date().toISOString()}));
    if(p)patrSet.add(p.toLowerCase());sourceSet.add(sourceKey);added++;await new Promise(r=>setTimeout(r,0));
  }
@@ -113,7 +111,7 @@ async function importCatalog(file){
 }
 function setupCatalogImport(){
  importCatalogBtn.onclick=()=>importCatalogFile.click();
- importCatalogFile.onchange=async()=>{const f=importCatalogFile.files[0];if(!f)return;try{await importCatalog(f)}catch(e){console.error(e);importCatalogStatus.textContent=`Erro na importação: ${e.name||"Erro"}${e.message?": "+e.message:""}`;toast("Falha na importação.")}importCatalogFile.value=""};
+ importCatalogFile.onchange=async()=>{const f=importCatalogFile.files[0];if(!f)return;try{await importCatalog(f)}catch(e){console.error(e);importCatalogStatus.textContent="Erro: arquivo incompatível ou corrompido.";toast("Falha na importação.")}importCatalogFile.value=""};
 }
 
 /* Motor visual */
@@ -130,7 +128,7 @@ function setSim(a,b){return Math.max(sim(a.full,b.full),sim(a.full,b.crop),sim(a
 /* Backup */
 function toData(b){return new Promise((a,z)=>{const r=new FileReader;r.onload=()=>a(r.result);r.onerror=()=>z(r.error);r.readAsDataURL(b)})}function fromData(u){const [h,d]=u.split(","),m=(h.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(d),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:m})}
 async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.4",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();toast("Backup exportado.")}
-async function importBackup(f){const d=JSON.parse(await f.text());if(d.tipo==="acervo-importacao"&&Array.isArray(d.obras)){await importCatalog(f);return}const t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
+async function importBackup(f){const d=JSON.parse(await f.text()),t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
 function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
 (async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
