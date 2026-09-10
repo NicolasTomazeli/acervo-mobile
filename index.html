@@ -88,6 +88,14 @@
     </div>
 
     <div class="card">
+      <h3>Importar acervo em lote</h3>
+      <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas e duplicidades são ignoradas.</p>
+      <button id="importCatalogBtn" class="primary full">Importar arquivo do acervo</button>
+      <input id="importCatalogFile" type="file" accept="application/json,.json" hidden>
+      <div id="importCatalogStatus" class="muted import-status"></div>
+    </div>
+
+    <div class="card">
       <h3>Backup completo</h3>
       <p class="muted">Mantém obras, imagens e conferências para restauração futura.</p>
       <div class="actions">
@@ -105,7 +113,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.4</b> — tema LBV + relatório + exclusão de períodos.</p>
+      <p class="muted">Acervo Mobile <b>0.5</b> — importação em lote + edição de obras + reconhecimento visual.</p>
     </div>
   </section>
 </main>
@@ -120,20 +128,21 @@
 <dialog id="artworkDialog">
   <form id="artworkForm" class="dialog-card">
     <div class="dialog-head">
-      <div><span class="pill">Referência</span><h2>Nova obra</h2></div>
+      <div><span class="pill">Referência</span><h2 id="artworkDialogTitle">Nova obra</h2></div>
       <button type="button" class="x" data-close="artworkDialog">✕</button>
     </div>
-    <label>Patrimônio *</label><input name="patrimonio" required>
+    <input type="hidden" name="editId" id="editId"><label>Patrimônio</label><input name="patrimonio" placeholder="Pode ficar vazio se a base original não possuir">
     <label>Nome da obra *</label><input name="nome" required>
     <label>Artista</label><input name="artista">
     <label>Localização</label><input name="localizacao">
     <label>Descrição</label><textarea name="descricao" rows="3"></textarea>
     <label>Fotos de referência</label><input id="referenceInput" type="file" accept="image/*" capture="environment" multiple>
-    <div id="referencePreview" class="preview-grid"></div>
+    <div id="existingPhotosWrap" class="hidden"><label>Fotos atuais</label><div id="existingPhotos" class="preview-grid editable-photos"></div></div><div id="referencePreview" class="preview-grid"></div>
     <p class="muted">Recomendado: 2 ou 3 fotos da obra, com enquadramentos ligeiramente diferentes.</p>
     <div class="actions sticky">
+      <button type="button" id="deleteArtworkBtn" class="danger hidden">Excluir obra</button>
       <button type="button" class="secondary" data-close="artworkDialog">Cancelar</button>
-      <button class="primary grow" type="submit">Salvar obra</button>
+      <button class="primary grow" type="submit">Salvar alterações</button>
     </div>
   </form>
 </dialog>

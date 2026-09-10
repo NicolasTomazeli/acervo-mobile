@@ -1,7 +1,7 @@
 
 const DB_NAME="acervo-mobile-db", DB_VERSION=1;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
-let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null;
+let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set();
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
 function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
@@ -13,15 +13,56 @@ const url=b=>b?URL.createObjectURL(b):"";
 const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 
 function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{const v=b.dataset.view;document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");if(v==="resultados")renderHistory();window.scrollTo({top:0,behavior:"smooth"})})}
-function setupDialogs(){newArtworkBtn.onclick=()=>artworkDialog.showModal();document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close())}
+function resetArtworkForm(){
+ editingArtworkId=null;removedPhotoIndexes=new Set();referenceFiles=[];artworkForm.reset();editId.value="";
+ artworkDialogTitle.textContent="Nova obra";existingPhotosWrap.classList.add("hidden");existingPhotos.innerHTML="";
+ referencePreview.innerHTML="";deleteArtworkBtn.classList.add("hidden");
+}
+function setupDialogs(){
+ newArtworkBtn.onclick=()=>{resetArtworkForm();artworkDialog.showModal()};
+ document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
+ deleteArtworkBtn.onclick=()=>editingArtworkId&&deleteArtwork(editingArtworkId);
+}
 function setupInstall(){if(standalone())installBtn.classList.add("installed");window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});window.addEventListener("appinstalled",()=>installBtn.classList.add("installed"));installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;return}installHelpText.textContent=/iphone|ipad|ipod/i.test(navigator.userAgent)?"No Safari: Compartilhar → Adicionar à Tela de Início.":"No Chrome: menu ⋮ → Instalar app / Adicionar à tela inicial.";installHelpDialog.showModal()}}
 function preview(fs,id){const e=document.getElementById(id);e.innerHTML="";fs.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const n=document.createElement("span");n.textContent=i+1;d.append(im,n);e.append(d)})}
 async function compress(f,max=1400,q=.84){const b=await createImageBitmap(f),k=Math.min(1,max/Math.max(b.width,b.height)),w=Math.round(b.width*k),h=Math.round(b.height*k),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(b,0,0,w,h);b.close?.();return new Promise(r=>c.toBlob(x=>r(x||f),"image/jpeg",q))}
 function setupInputs(){referenceInput.onchange=async()=>{referenceFiles=[];for(const f of [...referenceInput.files].slice(0,8))if(f.type.startsWith("image/"))referenceFiles.push(await compress(f));preview(referenceFiles,"referencePreview")};conferenceInput.onchange=async()=>{conferenceFiles=[];for(const f of [...conferenceInput.files].slice(0,7))if(f.type.startsWith("image/"))conferenceFiles.push(await compress(f));preview(conferenceFiles,"conferencePreview");runConferenceBtn.disabled=!conferenceFiles.length;clearConferenceBtn.classList.toggle("hidden",!conferenceFiles.length)};clearConferenceBtn.onclick=clearConference;runConferenceBtn.onclick=runConference}
 function clearConference(){conferenceFiles=[];conferenceInput.value="";conferencePreview.innerHTML="";runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden")}
 
-async function renderArtworks(){let a=(await all("obras")).sort((x,y)=>y.id-x.id),q=searchInput.value.toLowerCase().trim();statArtworks.textContent=a.length;statRefs.textContent=a.reduce((s,o)=>s+(o.fotos?.length||0),0);if(q)a=a.filter(o=>[o.nome,o.patrimonio,o.artista,o.localizacao].join(" ").toLowerCase().includes(q));artworkList.innerHTML="";emptyArtworks.classList.toggle("hidden",a.length>0);a.forEach(o=>{const c=document.createElement("div");c.className="art-card";const im=new Image;if(o.fotos?.[0])im.src=url(o.fotos[0]);const m=document.createElement("div");m.className="art-main";m.innerHTML=`<b>${esc(o.nome)}</b><div class=meta>${esc(o.patrimonio)} · ${esc(o.artista||"-")}</div><div class=meta>${esc(o.localizacao||"-")} · ${o.fotos?.length||0} foto(s)</div>`;c.append(im,m);artworkList.append(c)})}
-artworkForm.onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),p=(f.get("patrimonio")||"").trim(),n=(f.get("nome")||"").trim();if((await all("obras")).some(o=>String(o.patrimonio).toLowerCase()===p.toLowerCase()))return toast("Patrimônio já cadastrado.");const ds=[];toast("Analisando referências…");for(const x of referenceFiles)ds.push(await extractSet(x));await requestP(store("obras","readwrite").add({patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),fotos:[...referenceFiles],descriptors:ds,criadoEm:new Date().toISOString()}));e.target.reset();referenceFiles=[];referencePreview.innerHTML="";artworkDialog.close();renderArtworks();toast("Obra cadastrada.")};
+async function renderArtworks(){
+ let a=(await all("obras")).sort((x,y)=>y.id-x.id),q=searchInput.value.toLowerCase().trim();
+ statArtworks.textContent=a.length;statRefs.textContent=a.reduce((s,o)=>s+(o.fotos?.length||0),0);
+ if(q)a=a.filter(o=>[o.nome,o.patrimonio,o.artista,o.localizacao].join(" ").toLowerCase().includes(q));
+ artworkList.innerHTML="";emptyArtworks.classList.toggle("hidden",a.length>0);
+ a.forEach(o=>{
+   const c=document.createElement("div");c.className="art-card";const im=new Image;if(o.fotos?.[0])im.src=url(o.fotos[0]);
+   const m=document.createElement("div");m.className="art-main";m.innerHTML=`<b>${esc(o.nome||"Sem título")}</b><div class=meta>${esc(o.patrimonio||"Sem patrimônio")} · ${esc(o.artista||"-")}</div><div class=meta>${esc(o.localizacao||"-")} · ${o.fotos?.length||0} foto(s)</div>`;
+   const a=document.createElement("div");a.className="art-actions";const e=document.createElement("button");e.className="edit-art";e.textContent="Editar";e.onclick=()=>openEditArtwork(o.id);a.append(e);c.append(im,m,a);artworkList.append(c);
+ });
+}
+async function openEditArtwork(id){
+ const o=await requestP(store("obras").get(id));if(!o)return;
+ resetArtworkForm();editingArtworkId=id;editId.value=id;artworkDialogTitle.textContent="Editar obra";deleteArtworkBtn.classList.remove("hidden");
+ artworkForm.elements.patrimonio.value=o.patrimonio||"";artworkForm.elements.nome.value=o.nome||"";artworkForm.elements.artista.value=o.artista||"";artworkForm.elements.localizacao.value=o.localizacao||"";artworkForm.elements.descricao.value=o.descricao||"";
+ existingPhotos.innerHTML="";removedPhotoIndexes=new Set();
+ if(o.fotos?.length){existingPhotosWrap.classList.remove("hidden");o.fotos.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const b=document.createElement("button");b.type="button";b.className="remove-photo";b.textContent="×";b.onclick=()=>{removedPhotoIndexes.add(i);d.remove();if(existingPhotos.children.length===0)existingPhotosWrap.classList.add("hidden")};d.append(im,b);existingPhotos.append(d)})}
+ artworkDialog.showModal();
+}
+async function deleteArtwork(id){
+ if(!confirm("Excluir esta obra do acervo? As conferências antigas serão mantidas como histórico, mas o cadastro será removido."))return;
+ await requestP(store("obras","readwrite").delete(id));artworkDialog.close();resetArtworkForm();await renderArtworks();toast("Obra excluída.");
+}
+artworkForm.onsubmit=async e=>{
+ e.preventDefault();const f=new FormData(e.target),p=(f.get("patrimonio")||"").trim(),n=(f.get("nome")||"").trim();
+ if(!n)return toast("Nome da obra é obrigatório.");
+ const allWorks=await all("obras");if(p&&allWorks.some(o=>o.id!==editingArtworkId&&String(o.patrimonio||"").toLowerCase()===p.toLowerCase()))return toast("Patrimônio já cadastrado.");
+ let old={fotos:[],descriptors:[]};if(editingArtworkId)old=await requestP(store("obras").get(editingArtworkId))||old;
+ const keptFotos=(old.fotos||[]).filter((_,i)=>!removedPhotoIndexes.has(i)),keptDesc=(old.descriptors||[]).filter((_,i)=>!removedPhotoIndexes.has(i));
+ const newDesc=[];if(referenceFiles.length)toast("Analisando novas referências…");for(const x of referenceFiles)newDesc.push(await extractSet(x));
+ const wasEditing=!!editingArtworkId;const obj={...(editingArtworkId?old:{}),patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),fotos:[...keptFotos,...referenceFiles],descriptors:[...keptDesc,...newDesc],atualizadoEm:new Date().toISOString()};
+ if(editingArtworkId){obj.id=editingArtworkId;await requestP(store("obras","readwrite").put(obj))}else{obj.criadoEm=new Date().toISOString();await requestP(store("obras","readwrite").add(obj))}
+ artworkDialog.close();resetArtworkForm();await renderArtworks();toast(wasEditing?"Obra atualizada.":"Obra salva.");
+};
 
 async function ensureDescriptors(ws){for(const o of ws)if(!Array.isArray(o.descriptors)||o.descriptors.length!==(o.fotos?.length||0)||o.descriptors.some(x=>!x?.full)){o.descriptors=[];for(const f of o.fotos||[])o.descriptors.push(await extractSet(f));await requestP(store("obras","readwrite").put(o))}}
 function prog(d,t,txt){progressWrap.classList.remove("hidden");progressBar.style.width=`${Math.round(d/Math.max(1,t)*100)}%`;progressText.textContent=txt}
@@ -47,6 +88,32 @@ async function exportCsv(confId=null){
  const blob=new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-conferencia-${c.id}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");
 }
 
+
+/* Importação de acervo preparada a partir do Excel */
+function dataUrlBlob(u){const [h,d]=u.split(","),mime=(h.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(d),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
+async function importCatalog(file){
+ const status=document.getElementById("importCatalogStatus");status.innerHTML="Lendo arquivo…";
+ const data=JSON.parse(await file.text());
+ if(data.tipo!=="acervo-importacao"||!Array.isArray(data.obras))throw new Error("Formato de importação inválido");
+ const existing=await all("obras");const patrSet=new Set(existing.map(o=>String(o.patrimonio||"").trim().toLowerCase()).filter(Boolean)),sourceSet=new Set(existing.map(o=>o.sourceKey).filter(Boolean));
+ let added=0,skipped=0,photos=0;
+ for(let i=0;i<data.obras.length;i++){
+   const x=data.obras[i],pat=String(x.patrimonio||"").trim(),sourceKey=`${data.origem||"importacao"}#${x.linha_excel||i+1}`;
+   if((pat&&patrSet.has(pat.toLowerCase()))||sourceSet.has(sourceKey)){skipped++;continue}
+   const fotos=(x.fotos||[]).map(f=>dataUrlBlob(f.data)),descriptors=[];
+   status.innerHTML=`Importando <strong>${i+1}/${data.obras.length}</strong> · ${added} obra(s) adicionada(s)…`;
+   for(const f of fotos){descriptors.push(await extractSet(f));photos++;await new Promise(r=>setTimeout(r,0))}
+   await requestP(store("obras","readwrite").add({patrimonio:pat,nome:x.nome||"Sem título",artista:x.artista||"",localizacao:x.localizacao||"",descricao:x.descricao||"",fotos,descriptors,sourceKey,linhaExcel:x.linha_excel||null,criadoEm:new Date().toISOString()}));
+   if(p)patrSet.add(p.toLowerCase());sourceSet.add(sourceKey);added++;await new Promise(r=>setTimeout(r,0));
+ }
+ status.innerHTML=`Concluído: <strong>${added}</strong> obra(s), <strong>${photos}</strong> foto(s), ${skipped} duplicidade(s) ignorada(s).`;
+ await renderArtworks();toast("Importação concluída.");
+}
+function setupCatalogImport(){
+ importCatalogBtn.onclick=()=>importCatalogFile.click();
+ importCatalogFile.onchange=async()=>{const f=importCatalogFile.files[0];if(!f)return;try{await importCatalog(f)}catch(e){console.error(e);importCatalogStatus.textContent="Erro: arquivo incompatível ou corrompido.";toast("Falha na importação.")}importCatalogFile.value=""};
+}
+
 /* Motor visual */
 async function bmp(f){return createImageBitmap(f)}function canv(b,s,mode){const c=document.createElement("canvas");c.width=c.height=s;const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,s,s);if(mode==="crop"){const q=Math.min(b.width,b.height),sx=(b.width-q)/2,sy=(b.height-q)/2;x.drawImage(b,sx,sy,q,q,0,0,s,s)}else{const k=Math.min(s/b.width,s/b.height),w=b.width*k,h=b.height*k;x.drawImage(b,(s-w)/2,(s-h)/2,w,h)}return c}
 function gray(d){const a=[];for(let i=0;i<d.length;i+=4)a.push((.299*d[i]+.587*d[i+1]+.114*d[i+2])/255);return a}function avg(a){return a.reduce((s,x)=>s+x,0)/a.length}function sd(a,m){return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length)}function ah(g){const m=avg(g);return g.map(x=>x>=m?1:0).join("")}function norm(a){const m=avg(a),s=sd(a,m)||1;return a.map(x=>(x-m)/s)}
@@ -64,4 +131,4 @@ async function exportBackup(){const obras=[],cs=[];for(const o of await all("obr
 async function importBackup(f){const d=JSON.parse(await f.text()),t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
 function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
-(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
+(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
