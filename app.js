@@ -1,213 +1,34 @@
 
-const DB_NAME = "acervo-mobile-db";
-const DB_VERSION = 1;
-let db;
-let deferredPrompt = null;
-let conferenceFiles = [];
-let referenceFiles = [];
+let db,confFiles=[],refFiles=[];const TH=.82,REV=.62;
+const P=r=>new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)});
+function os(n,m="readonly"){return db.transaction(n,m).objectStore(n)} async function all(n){return P(os(n).getAll())}
+function init(){return new Promise((a,b)=>{const r=indexedDB.open("acervo-mobile-db",1);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras"))d.createObjectStore("obras",{keyPath:"id",autoIncrement:true});if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
+function toast(x){const t=document.querySelector("#toast");t.textContent=x;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200)}
+function prev(fs,id){const e=document.querySelector(id);e.innerHTML="";fs.forEach(f=>{const i=new Image;i.src=URL.createObjectURL(f);e.append(i)})}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{document.querySelectorAll("nav button").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.querySelector("#"+b.dataset.tab).classList.add("active");if(b.dataset.tab==="resultados")hist()});
+refInput.onchange=()=>{refFiles=[...refInput.files].filter(x=>x.type.startsWith("image/")).slice(0,8);prev(refFiles,"#refPrev")};
+confInput.onchange=()=>{confFiles=[...confInput.files].filter(x=>x.type.startsWith("image/")).slice(0,7);prev(confFiles,"#confPrev");btnConf.disabled=!confFiles.length};
 
-function openDB(){
-  return new Promise((resolve,reject)=>{
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = e=>{
-      const d=e.target.result;
-      if(!d.objectStoreNames.contains("obras")){
-        const s=d.createObjectStore("obras",{keyPath:"id",autoIncrement:true});
-        s.createIndex("patrimonio","patrimonio",{unique:true});
-      }
-      if(!d.objectStoreNames.contains("conferencias")){
-        d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true});
-      }
-    };
-    req.onsuccess=e=>resolve(e.target.result);
-    req.onerror=e=>reject(e.target.error);
-  });
-}
-function tx(store,mode="readonly"){ return db.transaction(store,mode).objectStore(store); }
-function reqP(req){ return new Promise((res,rej)=>{req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);}); }
-async function all(store){ return reqP(tx(store).getAll()); }
-function blobURL(blob){ return blob ? URL.createObjectURL(blob) : ""; }
-function toast(msg){
-  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
-  clearTimeout(window.__toast); window.__toast=setTimeout(()=>t.classList.remove("show"),2200);
-}
+function draw(b,s){const c=document.createElement("canvas");c.width=c.height=s;const x=c.getContext("2d",{willReadFrequently:true});x.fillStyle="#fff";x.fillRect(0,0,s,s);const k=Math.min(s/b.width,s/b.height),w=b.width*k,h=b.height*k;x.drawImage(b,(s-w)/2,(s-h)/2,w,h);return c}
+function gray(d){let a=[];for(let i=0;i<d.length;i+=4)a.push((.299*d[i]+.587*d[i+1]+.114*d[i+2])/255);return a}
+function mean(a){return a.reduce((s,x)=>s+x,0)/a.length} function sd(a,m){return Math.sqrt(a.reduce((s,x)=>s+(x-m)**2,0)/a.length)}
+function ah(g){const m=mean(g);return g.map(x=>x>=m?1:0).join("")}
+function dh(b){const c=document.createElement("canvas");c.width=9;c.height=8;const x=c.getContext("2d",{willReadFrequently:true});x.drawImage(b,0,0,9,8);const g=gray(x.getImageData(0,0,9,8).data);let z="";for(let y=0;y<8;y++)for(let q=0;q<8;q++)z+=g[y*9+q]>g[y*9+q+1]?"1":"0";return z}
+function hist(d,n=8){let h=new Array(n*3).fill(0);for(let i=0;i<d.length;i+=4){h[Math.min(n-1,d[i]*n>>8)]++;h[n+Math.min(n-1,d[i+1]*n>>8)]++;h[2*n+Math.min(n-1,d[i+2]*n>>8)]++}let k=Math.sqrt(h.reduce((s,x)=>s+x*x,0))||1;return h.map(x=>x/k)}
+function grad(g,s){let v=[];for(let y=1;y<s-1;y+=2)for(let x=1;x<s-1;x+=2){let a=g[y*s+x+1]-g[y*s+x-1],b=g[(y+1)*s+x]-g[(y-1)*s+x];v.push(Math.hypot(a,b))}let n=Math.hypot(...v)||1;return v.map(x=>x/n)}
+function norm(a){let m=mean(a),s=sd(a,m)||1;return a.map(x=>(x-m)/s)}
+async function desc(f){const b=await createImageBitmap(f),c=draw(b,32),d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,32,32).data,g=gray(d),c8=draw(b,8),g8=gray(c8.getContext("2d",{willReadFrequently:true}).getImageData(0,0,8,8).data),r={a:ah(g8),d:dh(b),h:hist(d),g:norm(g),e:grad(g,32)};b.close?.();return r}
+function ham(a,b){let s=0;for(let i=0;i<a.length;i++)if(a[i]===b[i])s++;return s/a.length} function cos(a,b){let d=0,x=0,y=0;for(let i=0;i<a.length;i++){d+=a[i]*b[i];x+=a[i]*a[i];y+=b[i]*b[i]}return d/Math.sqrt(x*y)}
+function sim(a,b){return .18*ham(a.a,b.a)+.24*ham(a.d,b.d)+.22*Math.max(0,cos(a.h,b.h))+.20*((cos(a.g,b.g)+1)/2)+.16*Math.max(0,cos(a.e,b.e))}
 
-function setupTabs(){
-  document.querySelectorAll(".nav-item").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      const name=btn.dataset.tab;
-      document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b===btn));
-      document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
-      document.getElementById("tab-"+name).classList.add("active");
-      window.scrollTo({top:0,behavior:"smooth"});
-      if(name==="resultados") renderHistory();
-    });
-  });
-}
-function setupDialogs(){
-  document.querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.open).showModal());
-  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
-}
+form.onsubmit=async e=>{e.preventDefault();const f=new FormData(form),p=f.get("patrimonio").trim(),n=f.get("nome").trim(),o=await all("obras");if(o.some(x=>x.patrimonio.toLowerCase()===p.toLowerCase()))return toast("Patrimônio já cadastrado");toast("Analisando referência...");let ds=[];for(const x of refFiles)ds.push(await desc(x));await P(os("obras","readwrite").add({patrimonio:p,nome:n,artista:f.get("artista").trim(),localizacao:f.get("localizacao").trim(),descricao:f.get("descricao").trim(),fotos:[...refFiles],descriptors:ds}));form.reset();refFiles=[];refPrev.innerHTML="";dlg.close();toast("Obra cadastrada");render()};
 
-function makePreview(files,target){
-  target.innerHTML="";
-  files.forEach((f,i)=>{
-    const d=document.createElement("div"); d.className="preview";
-    const img=document.createElement("img"); img.src=blobURL(f);
-    const n=document.createElement("span"); n.className="num"; n.textContent=i+1;
-    d.append(img,n); target.appendChild(d);
-  });
-}
+async function ensure(o){if(!Array.isArray(o.descriptors)||o.descriptors.length!==(o.fotos?.length||0)){o.descriptors=[];for(const f of (o.fotos||[]))o.descriptors.push(await desc(f));await P(os("obras","readwrite").put(o))}}
 
-async function renderObras(){
-  const list=document.getElementById("obraList");
-  const q=(document.getElementById("searchInput").value||"").toLowerCase().trim();
-  let obras=(await all("obras")).sort((a,b)=>b.id-a.id);
-  const totalFotos=obras.reduce((s,o)=>s+(o.fotos?.length||0),0);
-  document.getElementById("statObras").textContent=obras.length;
-  document.getElementById("statFotos").textContent=totalFotos;
-  if(q) obras=obras.filter(o=>[o.nome,o.patrimonio,o.artista,o.localizacao].join(" ").toLowerCase().includes(q));
-  list.innerHTML="";
-  document.getElementById("emptyAcervo").classList.toggle("hidden",obras.length>0);
-  obras.forEach(o=>{
-    const card=document.createElement("div"); card.className="art-card";
-    const img=document.createElement("img"); img.className="thumb";
-    if(o.fotos?.[0]) img.src=blobURL(o.fotos[0]); else img.alt="Sem foto";
-    const m=document.createElement("div"); m.className="art-main";
-    m.innerHTML=`<b>${escapeHtml(o.nome)}</b>
-      <div class="meta">${escapeHtml(o.patrimonio)} · ${escapeHtml(o.artista||"Artista não informado")}</div>
-      <div class="meta">${escapeHtml(o.localizacao||"Localização não informada")} · ${o.fotos?.length||0} foto(s)</div>`;
-    card.append(img,m); list.appendChild(card);
-  });
-}
-function escapeHtml(x=""){return x.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));}
+btnConf.onclick=async()=>{const obras=await all("obras"),refs=obras.filter(x=>(x.fotos?.length||0)>0);if(!refs.length)return toast("Cadastre ao menos uma obra com foto");btnConf.disabled=true;btnConf.textContent="Analisando...";for(const o of refs)await ensure(o);let items=[];for(let i=0;i<confFiles.length;i++){const q=await desc(confFiles[i]),cs=[];for(const o of refs){let best=0;for(const d of o.descriptors||[])best=Math.max(best,sim(q,d));cs.push({id:o.id,nome:o.nome,pat:o.patrimonio,score:best})}cs.sort((a,b)=>b.score-a.score);const t=cs[0],s=cs[1],margin=s?t.score-s.score:t.score,ok=t.score>=TH&&(cs.length===1||margin>=.035);items.push({foto:confFiles[i],status:ok?"localizado":"pendente",obraId:ok?t.id:null,score:t.score,candidatos:cs.slice(0,3)});btnConf.textContent=`Analisando ${i+1}/${confFiles.length}`}const id=await P(os("conferencias","readwrite").add({criadoEm:new Date().toISOString(),items}));confFiles=[];confInput.value="";confPrev.innerHTML="";btnConf.textContent="Iniciar conferência";btnConf.disabled=true;await hist();await openRes(id);toast("Conferência concluída")};
 
-async function saveArtwork(ev){
-  ev.preventDefault();
-  const f=new FormData(ev.target);
-  const patrimonio=(f.get("patrimonio")||"").trim();
-  const nome=(f.get("nome")||"").trim();
-  if(!patrimonio||!nome){toast("Informe patrimônio e nome.");return;}
-  const obras=await all("obras");
-  if(obras.some(o=>o.patrimonio.toLowerCase()===patrimonio.toLowerCase())){
-    toast("Esse patrimônio já está cadastrado."); return;
-  }
-  const item={
-    patrimonio,nome,
-    artista:(f.get("artista")||"").trim(),
-    localizacao:(f.get("localizacao")||"").trim(),
-    descricao:(f.get("descricao")||"").trim(),
-    fotos:[...referenceFiles],
-    criadoEm:new Date().toISOString()
-  };
-  await reqP(tx("obras","readwrite").add(item));
-  ev.target.reset(); referenceFiles=[]; document.getElementById("referencePreview").innerHTML="";
-  document.getElementById("cadastroModal").close();
-  toast("Obra cadastrada.");
-  renderObras();
-}
+async function render(){const o=await all("obras");nObras.textContent=o.length;nFotos.textContent=o.reduce((s,x)=>s+(x.fotos?.length||0),0);lista.innerHTML="";o.slice().reverse().forEach(x=>{const d=document.createElement("div"),i=new Image;if(x.fotos?.[0])i.src=URL.createObjectURL(x.fotos[0]);d.append(i);const m=document.createElement("div");m.innerHTML=`<b>${x.nome}</b><div class=meta>${x.patrimonio} · ${x.artista||"-"}</div><div class=meta>${x.localizacao||"-"} · ${x.fotos?.length||0} foto(s)</div>`;d.append(m);lista.append(d)})}
+async function hist(){const c=(await all("conferencias")).reverse();hist.innerHTML="";c.forEach(x=>{const l=x.items.filter(i=>i.status==="localizado").length,b=document.createElement("button");b.innerHTML=`<b>Conferência #${x.id}</b><div class=meta>${new Date(x.criadoEm).toLocaleString("pt-BR")} · ${l} localizada(s) · ${x.items.length-l} pendente(s)</div>`;b.onclick=()=>openRes(x.id);hist.append(b)})}
+async function openRes(id){const c=await P(os("conferencias").get(id)),obras=await all("obras"),mp=new Map(obras.map(x=>[x.id,x])),l=c.items.filter(i=>i.status==="localizado").length;resTitle.textContent=`Conferência #${id}`;resSummary.innerHTML=`<div><b>${l}</b><small>localizadas</small></div><div><b>${c.items.length-l}</b><small>pendentes</small></div>`;resItems.innerHTML="";c.items.forEach((x,k)=>{const r=document.createElement("div");r.className="result";const im=new Image;im.src=URL.createObjectURL(x.foto);r.append(im);const t=document.createElement("div"),o=x.obraId?mp.get(x.obraId):null;let h=`<span class="status ${o?"ok":"pend"}">${o?"LOCALIZADA":"PENDENTE"}</span><h3>${o?o.nome:"Imagem "+(k+1)}</h3><div class=meta>Similaridade visual: ${(x.score*100).toFixed(1)}%</div>`;if(o)h+=`<div class=meta>Patrimônio: ${o.patrimonio} · ${o.artista||"-"} · ${o.localizacao||"-"}</div>`;else x.candidatos.forEach((c,j)=>h+=`<div class=candidate><span>${j+1}. ${c.nome} · ${c.pat}</span><b>${(c.score*100).toFixed(1)}%</b></div>`);t.innerHTML=h;r.append(t);resItems.append(r)});resDlg.showModal()}
 
-function setupConference(){
-  const input=document.getElementById("conferenceInput");
-  document.getElementById("cameraBtn").onclick=()=>input.click();
-  input.onchange=()=>{
-    const files=[...input.files].filter(f=>f.type.startsWith("image/")).slice(0,7);
-    if(input.files.length>7) toast("Foram consideradas apenas as 7 primeiras imagens.");
-    conferenceFiles=files;
-    makePreview(files,document.getElementById("conferencePreview"));
-    document.getElementById("startConferenceBtn").disabled=!files.length;
-    document.getElementById("clearConferenceBtn").classList.toggle("hidden",!files.length);
-  };
-  document.getElementById("clearConferenceBtn").onclick=()=>{
-    conferenceFiles=[];input.value="";document.getElementById("conferencePreview").innerHTML="";
-    document.getElementById("startConferenceBtn").disabled=true;
-    document.getElementById("clearConferenceBtn").classList.add("hidden");
-  };
-  document.getElementById("startConferenceBtn").onclick=startConference;
-}
-
-async function startConference(){
-  if(!conferenceFiles.length)return;
-  const items=conferenceFiles.map((foto,i)=>({
-    ordem:i+1,foto,status:"pendente",score:null,obraId:null,
-    observacao:"Reconhecimento automático será conectado na próxima versão."
-  }));
-  const conf={criadoEm:new Date().toISOString(),items};
-  const id=await reqP(tx("conferencias","readwrite").add(conf));
-  conferenceFiles=[];document.getElementById("conferenceInput").value="";
-  document.getElementById("conferencePreview").innerHTML="";
-  document.getElementById("startConferenceBtn").disabled=true;
-  document.getElementById("clearConferenceBtn").classList.add("hidden");
-  await renderHistory();
-  await openResult(id);
-  toast("Conferência registrada.");
-}
-
-async function renderHistory(){
-  const el=document.getElementById("conferenceHistory");
-  const confs=(await all("conferencias")).sort((a,b)=>b.id-a.id);
-  el.innerHTML="";
-  document.getElementById("emptyResults").classList.toggle("hidden",confs.length>0);
-  confs.forEach(c=>{
-    const located=c.items.filter(i=>i.status==="localizado").length;
-    const pending=c.items.length-located;
-    const card=document.createElement("button");
-    card.className="history-card"; card.style.width="100%"; card.style.textAlign="left";
-    card.innerHTML=`<div class="history-main">
-      <div class="history-head"><b>Conferência #${c.id}</b><span class="status pending">${pending} pendente(s)</span></div>
-      <div class="meta">${new Date(c.criadoEm).toLocaleString("pt-BR")} · ${c.items.length} imagem(ns) · ${located} localizada(s)</div>
-    </div><span>›</span>`;
-    card.onclick=()=>openResult(c.id); el.appendChild(card);
-  });
-}
-
-async function openResult(id){
-  const c=await reqP(tx("conferencias").get(id));
-  if(!c)return;
-  const located=c.items.filter(i=>i.status==="localizado").length;
-  const pending=c.items.length-located;
-  document.getElementById("resultTitle").textContent=`Conferência #${id}`;
-  document.getElementById("resultSummary").innerHTML=`
-    <div class="stat"><b>${located}</b><span>localizadas</span></div>
-    <div class="stat"><b>${pending}</b><span>pendentes</span></div>`;
-  const wrap=document.getElementById("resultItems"); wrap.innerHTML="";
-  c.items.forEach(it=>{
-    const d=document.createElement("div"); d.className="result-item";
-    const img=document.createElement("img"); img.src=blobURL(it.foto);
-    const text=document.createElement("div");
-    text.innerHTML=`<span class="status ${it.status==="localizado"?"ok":"pending"}">${it.status==="localizado"?"LOCALIZADA":"PENDENTE"}</span>
-      <h4>Imagem ${it.ordem}</h4>
-      <p>${escapeHtml(it.observacao||"")}</p>`;
-    d.append(img,text); wrap.appendChild(d);
-  });
-  document.getElementById("resultModal").showModal();
-}
-
-function setupInstall(){
-  window.addEventListener("beforeinstallprompt",e=>{
-    e.preventDefault(); deferredPrompt=e;
-    document.getElementById("installWrap").classList.remove("hidden");
-  });
-  document.getElementById("installBtn").onclick=async()=>{
-    if(!deferredPrompt)return;
-    deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null;
-    document.getElementById("installWrap").classList.add("hidden");
-  };
-}
-
-async function boot(){
-  db=await openDB();
-  setupTabs(); setupDialogs(); setupConference(); setupInstall();
-  document.getElementById("artworkForm").addEventListener("submit",saveArtwork);
-  document.getElementById("searchInput").addEventListener("input",renderObras);
-  document.getElementById("referenceInput").addEventListener("change",e=>{
-    referenceFiles=[...e.target.files].filter(f=>f.type.startsWith("image/")).slice(0,8);
-    makePreview(referenceFiles,document.getElementById("referencePreview"));
-  });
-  renderObras();renderHistory();
-
-  if("serviceWorker" in navigator){
-    navigator.serviceWorker.register("./sw.js").catch(console.warn);
-  }
-}
-boot().catch(e=>{console.error(e);toast("Erro ao iniciar o aplicativo.");});
+(async()=>{db=await init();await render();await hist();if("serviceWorker"in navigator)navigator.serviceWorker.register("./sw.js")})();
