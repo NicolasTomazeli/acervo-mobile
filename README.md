@@ -1,33 +1,27 @@
-# Acervo Mobile 0.7.2 — reconhecimento original restaurado
+# Acervo Mobile 0.7.3 — confirmação a partir de 94/100
 
-Esta edição recupera o cálculo visual e os critérios de confirmação do projeto enviado originalmente. As versões 0.6 e 0.7 trocaram esse motor e introduziram condições que deixavam casos reconhecidos pelo original como pendentes. A recuperação mantém o processamento em segundo plano, os recortes manuais, a importação que reúne fotos do mesmo patrimônio e a preservação dos dados.
+Regra solicitada: a melhor candidata é confirmada automaticamente quando sua nota visual bruta é **maior ou igual a 94/100**. A diferença para a segunda candidata e os antigos limites individuais de qualidade, hash e gradiente não bloqueiam uma nota suficiente. Abaixo de 94, fica pendente. Se outra obra tiver nota muito próxima, aparece um aviso, sem impedir a confirmação. Em empate exato, a ordenação escolhe o menor ID; a foto sozinha não distingue cadastros com a mesma imagem.
 
-## Como atualizar no GitHub
+A nota é **semelhança visual, não probabilidade de acerto**. A versão mantém a possibilidade de revisar ou desfazer uma identificação. A exibição trunca a nota em uma casa decimal, evitando mostrar 94,0 quando o valor bruto ainda é menor que 94. O CSV usa a mesma exibição.
 
-1. No aplicativo atual, use Ajustes → Exportar backup.
-2. Extraia `acervo-mobile-v0.7.2-original-github.zip` e envie **o conteúdo extraído**, substituindo os arquivos de mesmo nome na raiz do repositório. Não envie apenas o ZIP nem crie uma subpasta para esta versão. Inclua `sw.js` e a pasta `icons`.
-3. Aguarde a publicação do GitHub Pages terminar com sucesso em Actions.
-4. Abra o aplicativo com internet, feche todas as abas do site e o aplicativo instalado e abra novamente. Em Ajustes deve aparecer **0.7.2 — reconhecimento do projeto original restaurado**.
-5. Para testar resultados antigos, use **Reanalisar fotos**. A nova conferência será salva separadamente. Os descritores serão preparados automaticamente na primeira análise, sem apagar fotos, IDs ou histórico.
+## Publicar
 
-Não precisa importar o acervo novamente, limpar os dados do site ou reinstalar. O banco continua sendo `acervo-mobile-db`, versão 2, na mesma origem e no mesmo perfil do navegador. Arquivos antigos de testes ou `foreground.js` que já estejam no repositório não são carregados pelo aplicativo desta edição.
+1. Exporte um backup em Ajustes.
+2. Extraia `acervo-mobile-v0.7.3-94-github.zip` e envie seu conteúdo à raiz do repositório, substituindo os arquivos de mesmo nome. Inclua `sw.js`, `matcher.js`, `foreground.js`, `matcher-worker.js`, `app.js`, `index.html` e a pasta `icons`, além dos demais arquivos do ZIP. Não envie apenas o ZIP nem crie uma subpasta de versão.
+3. Aguarde Actions concluir a publicação do GitHub Pages.
+4. Abra com internet, feche todas as abas e janelas do Acervo e abra novamente. Em Ajustes aparece **0.7.3** e a regra de 94/100.
+5. Use **Reanalisar fotos** para aplicar a regra aos resultados antigos. A conferência anterior é mantida.
 
-## O que foi restaurado
+Não é necessário apagar dados, reinstalar ou importar o acervo novamente. Fotos, recortes, IDs e histórico são preservados. Descritores da 0.7.1 são compatíveis; os da 0.7.2 são recalculados a partir das fotos na primeira análise.
 
-- Imagem inteira preservando proporção e recorte central quadrado, como no original.
-- Mesmos quatro cruzamentos entre as duas representações das fotos.
-- Mesmos pesos de hash médio (22%), cores (25%), tons normalizados (31%) e contornos (22%).
-- Confirmação a partir de 0,82 e diferença de pelo menos 0,035 para a segunda obra; com uma única candidata, vale o limite de pontuação original.
-- Sem os bloqueios adicionais de pHash, gradientes e qualidade introduzidos nas versões seguintes. A redução automática de fundo também deixou de participar da comparação. A delimitação manual permanece disponível.
+## Cálculo escolhido
 
-Os descritores antigos são recalculados a partir das fotos preservadas. Imagens uniformes, que produziam divisões por zero no código original, ficam pendentes com índice numérico em vez de contaminar a ordenação com NaN.
+Foi comparado o cálculo do original restaurado com o cálculo de estrutura da 0.7.1, ambos usando exatamente o mesmo limite de 94 e sem margem mínima. O segundo apresentou mais acertos e menos confirmações erradas nos testes disponíveis; por isso é usado nesta edição, com a nova regra simples de decisão. Os pesos são: tons normalizados 35%, pHash 25%, gradientes 22%, orientação de contornos 10% e cores distribuídas pela imagem 8%. São testados recortes e pequenas inclinações; a redução de fundo uniforme também pode contribuir, com desconto de 3% na nota obtida por esse caminho.
 
-## Limites
+As condições internas que descartam representações sem detalhes ou máscaras de fundo inconsistentes continuam fazendo parte do cálculo. Depois que a nota final é obtida, nenhuma regra adicional de qualidade ou margem veta uma nota de pelo menos 94.
 
-Esta é uma recuperação do comportamento original, não uma alegação de aumento geral de precisão. O motor original também pode errar e continua sensível a iluminação e fundo. Duas referências muito parecidas ainda podem exigir confirmação. Os testes não incluem novas fotos reais do celular do usuário. Consulte o relatório de validação para os erros observados e a metodologia.
+## Limites e testes
 
-## Desenvolvimento e testes
+Em 2.345 consultas simuladas da base fornecida, o original com limite 94 confirmou 1.106, das quais 24 eram erradas; o cálculo escolhido confirmou 1.433, das quais 10 eram erradas. Ao remover a identidade correta do catálogo, as confirmações erradas foram 55/335 e 20/335, respectivamente. A nova regra não elimina falsos reconhecimentos. A comparação não inclui fotos reais novas do celular e não comprova que este seja o melhor método possível em campo. Consulte o relatório entregue.
 
-O código completo e os testes ficam na pasta `acervo-mobile-v0.7.2-original` entregue junto do ZIP. O ZIP de publicação contém apenas os arquivos necessários ao site e este README.
-
-Para testar localmente: `python -m http.server 8000 --bind 127.0.0.1` nesta pasta; abra http://127.0.0.1:8000. Para os testes automatizados, instale as dependências com `npm install`, tenha Chrome instalado e defina `ACERVO_CATALOG` como o caminho do JSON original. Execute `npm test`, `npm run test:browser` e `npm run benchmark`. O catálogo pessoal não está incluído nos pacotes.
+O código completo e os testes estão na pasta `acervo-mobile-v0.7.3-94` entregue junto ao ZIP. O ZIP de publicação contém os arquivos do aplicativo e este README. Para testar: instale dependências com `npm install`, tenha Chrome instalado e defina `ACERVO_CATALOG` com o caminho do JSON original. Execute `npm test`, `npm run test:browser` e `npm run benchmark`. Para servir localmente: `python -m http.server 8000 --bind 127.0.0.1`.

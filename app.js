@@ -2,6 +2,8 @@
 const DB_NAME="acervo-mobile-db", DB_VERSION=2;
 let artworkCache=null, artworkLimit=60, busy=false;
 let referenceCrops=[],conferenceCrops=[],existingCropEdits=new Map();
+// Truncate for display so a raw 93.99 never appears as an accepted 94.0.
+const visualScoreText=score=>(Math.floor(Math.min(1,Math.max(0,score))*1000)/10).toFixed(1);
 function showError(e){console.error(e);toast(e.name==='QuotaExceededError'?'Sem espaço no aparelho. Exporte um backup antes de liberar armazenamento.':`Não foi possível concluir: ${e.message||e}`);}
 async function task(fn){
  if(busy)return;
@@ -185,7 +187,7 @@ async function openResult(id){
   let h=`<span class="status ${it.status==='localizado'?'ok':'pending'}">${it.status==='localizado'?'LOCALIZADA':'PENDENTE'}</span>`;
   h+=o?`<h4>${esc(o.nome)}</h4><p><b>Patrimônio:</b> ${esc(o.patrimonio||'Não informado')}</p><p>${esc(o.artista||'-')} · ${esc(o.localizacao||'-')}</p>`:`<h4>Imagem ${it.ordem||idx+1}</h4>`;
   if(it.status==='localizado'&&!o)h+='<p>Cadastro da obra removido. A confirmação foi preservada no histórico.</p>';
-  if(it.score!=null)h+=`<p><b>Índice visual:</b> ${(it.score*100).toFixed(1)}/100 — não é probabilidade de acerto.</p>`;
+  if(it.score!=null)h+=`<p><b>Semelhança visual:</b> ${visualScoreText(it.score)}/100 — não é probabilidade de acerto.</p>`;
   h+=`<p>${esc(it.observacao||'')}</p>`;if(it.recorte)h+='<p>Mostrando a área analisada. Foto original preservada no backup.</p>';
   if(it.status==='localizado')h+=`<button class="secondary undo-match" data-undo="${idx}">Revisar / desfazer</button>`;
   t.innerHTML=h;
@@ -195,7 +197,7 @@ async function openResult(id){
    for(const x of it.candidatos||[]){
     const work=mp.get(x.obraId);if(!work)continue;
     const row=document.createElement('div');row.className='candidate';const photo=new Image;setFocusedPhoto(photo,work.fotos?.[0],work.recortes?.[0],`Referência: ${work.nome}`);
-    const label=document.createElement('span');label.innerHTML=`${esc(work.nome)} · ${esc(work.patrimonio||'Sem patrimônio')}<br><small>${esc(work.localizacao||'')} · ${(x.score*100).toFixed(1)}/100</small>`;
+    const label=document.createElement('span');label.innerHTML=`${esc(work.nome)} · ${esc(work.patrimonio||'Sem patrimônio')}<br><small>${esc(work.localizacao||'')} · ${visualScoreText(x.score)}/100</small>`;
     const button=document.createElement('button');button.className='confirm';button.textContent='Confirmar';button.onclick=()=>task(()=>confirmCandidate(id,idx,x.obraId));row.append(photo,label,button);box.append(row);
    }
    const select=document.createElement('select');select.setAttribute('aria-label','Selecionar outra obra do acervo');select.innerHTML='<option value="">Outra obra do acervo…</option>';
@@ -220,7 +222,7 @@ async function exportCsv(confId=null){
  const foundBy=new Map();c.items.forEach((it,idx)=>{if(it.obraId){const prev=foundBy.get(it.obraId);if(!prev||((it.score||0)>(prev.score||0)))foundBy.set(it.obraId,{...it,leitura:idx+1})}});
  const header=["Conferencia","Data da conferencia","Patrimonio","Nome da obra","Artista","Localizacao","Descricao","Qtd fotos referencia","Fotos referencia","Encontrada no periodo","Leitura","Indice visual (0 a 100)","Metodo de confirmacao"];
  const rows=[header.map(csvCell).join(";")];
- for(const o of works){const f=foundBy.get(o.id),fotoTxt=(o.fotos||[]).map((_,i)=>`Foto ${i+1}`).join(" | ");rows.push([c.id,new Date(c.criadoEm).toLocaleString("pt-BR"),o.patrimonio,o.nome,o.artista||"",o.localizacao||"",o.descricao||"",o.fotos?.length||0,fotoTxt,f?"SIM":"NÃO",f?.leitura||"",f?.score!=null?(f.score*100).toFixed(1):"",f?(f.metodo||(f.observacao==="Confirmado manualmente."?"manual":"automatico")):""].map(csvCell).join(";"))}
+ for(const o of works){const f=foundBy.get(o.id),fotoTxt=(o.fotos||[]).map((_,i)=>`Foto ${i+1}`).join(" | ");rows.push([c.id,new Date(c.criadoEm).toLocaleString("pt-BR"),o.patrimonio,o.nome,o.artista||"",o.localizacao||"",o.descricao||"",o.fotos?.length||0,fotoTxt,f?"SIM":"NÃO",f?.leitura||"",f?.score!=null?visualScoreText(f.score):"",f?(f.metodo||(f.observacao==="Confirmado manualmente."?"manual":"automatico")):""].map(csvCell).join(";"))}
  const blob=new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-conferencia-${c.id}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");
 }
 
@@ -274,7 +276,7 @@ const extractSet=f=>Visual.extract(f);
 
 /* Backup */
 function toData(b){return new Promise((a,z)=>{const r=new FileReader;r.onload=()=>a(r.result);r.onerror=()=>z(r.error);r.readAsDataURL(b)})}const fromData=dataUrlBlob;
-async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.7.2",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Backup exportado.")}
+async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.7.3",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Backup exportado.")}
 async function importBackup(f){
  const data=JSON.parse(await f.text());
  if(data.tipo==='acervo-importacao'){await importCatalog(f);return;}
