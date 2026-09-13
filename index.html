@@ -52,6 +52,7 @@
 
     <div class="card">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
+      <p class="muted">Se o fundo mudou, use <b>Delimitar obra</b> na foto e na referência cadastrada. Inclua a peça inteira, com pouco fundo ao redor.</p>
       <div id="conferencePreview" class="preview-grid"></div>
       <div class="actions">
         <button id="clearConferenceBtn" class="secondary hidden">Limpar</button>
@@ -113,7 +114,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.6.0</b> — reconhecimento com revisão visual, análise em segundo plano e importação segura.</p>
+      <p class="muted">Acervo Mobile <b>0.7.1</b> — correção da confirmação automática e revisão das correspondências.</p>
     </div>
   </section>
 </main>
@@ -158,6 +159,8 @@
       <button id="exportCurrentCsvBtn" class="secondary grow">Exportar CSV</button>
       <button id="deleteCurrentBtn" class="danger grow">Excluir conferência</button>
     </div>
+    <button id="reanalyzeBtn" class="primary full" style="margin-top:14px">Reanalisar fotos</button>
+    <p class="muted">Cria uma nova conferência com estas fotos e mantém o resultado anterior no histórico.</p>
     <div id="resultItems" class="result-list"></div>
   </div>
 </dialog>
@@ -171,8 +174,10 @@
 </dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="./foreground.js"></script>
 <script src="./matcher.js"></script>
 <script src="./visual-client.js"></script>
+<script src="./focus-crop.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

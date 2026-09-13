@@ -1,6 +1,7 @@
 
 const DB_NAME="acervo-mobile-db", DB_VERSION=2;
 let artworkCache=null, artworkLimit=60, busy=false;
+let referenceCrops=[],conferenceCrops=[],existingCropEdits=new Map();
 function showError(e){console.error(e);toast(e.name==='QuotaExceededError'?'Sem espaço no aparelho. Exporte um backup antes de liberar armazenamento.':`Não foi possível concluir: ${e.message||e}`);}
 async function task(fn){
  if(busy)return;
@@ -13,6 +14,17 @@ function setPhoto(im,blob,alt='Foto da obra'){
  if(im.dataset.photoUrl)URL.revokeObjectURL(im.dataset.photoUrl);
  im.alt=alt;if(!blob){im.removeAttribute('src');return;}const src=URL.createObjectURL(blob);im.dataset.photoUrl=src;
  im.onload=im.onerror=()=>{URL.revokeObjectURL(src);delete im.dataset.photoUrl;};im.src=src;
+}
+const photoJobs=new WeakMap();
+function setFocusedPhoto(im,blob,rect,alt='Foto da obra'){
+ const job={};photoJobs.set(im,job);
+ if(!rect){setPhoto(im,blob,alt);return;}
+ FocusCrop.apply(blob,rect).then(cropped=>{if(photoJobs.get(im)===job&&im.isConnected)setPhoto(im,cropped,alt+' — área selecionada');}).catch(showError);
+}
+function addFocusButton(parent,im,blob,getRect,onChange){
+ parent.classList.add('has-focus');const button=document.createElement('button');button.type='button';button.className='focus-button';button.textContent=getRect()?'Ajustar área':'Delimitar obra';
+ button.onclick=async()=>{if(busy)return;try{const rect=await FocusCrop.choose(blob,getRect());if(rect===undefined)return;onChange(rect);setFocusedPhoto(im,blob,rect);button.textContent=rect?'Ajustar área':'Delimitar obra';}catch(e){showError(e);}};
+ parent.append(button);
 }
 function clearImages(container){container.querySelectorAll('[data-photo-url]').forEach(im=>URL.revokeObjectURL(im.dataset.photoUrl));container.replaceChildren();}
 const searchKey=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -38,7 +50,7 @@ const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator
 
 function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{const v=b.dataset.view;document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");if(v==="resultados")renderHistory();window.scrollTo({top:0,behavior:"smooth"})})}
 function resetArtworkForm(){
- editingArtworkId=null;removedPhotoIndexes=new Set();referenceFiles=[];artworkForm.reset();editId.value="";
+ editingArtworkId=null;removedPhotoIndexes=new Set();referenceFiles=[];referenceCrops=[];existingCropEdits=new Map();artworkForm.reset();editId.value="";
  artworkDialogTitle.textContent="Nova obra";existingPhotosWrap.classList.add("hidden");clearImages(existingPhotos);
  clearImages(referencePreview);deleteArtworkBtn.classList.add("hidden");
 }
@@ -48,14 +60,20 @@ function setupDialogs(){
  deleteArtworkBtn.onclick=()=>editingArtworkId&&task(()=>deleteArtwork(editingArtworkId));
 }
 function setupInstall(){if(standalone())installBtn.classList.add("installed");window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});window.addEventListener("appinstalled",()=>installBtn.classList.add("installed"));installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;return}installHelpText.textContent=/iphone|ipad|ipod/i.test(navigator.userAgent)?"No Safari: Compartilhar → Adicionar à Tela de Início.":"No Chrome: menu ⋮ → Instalar app / Adicionar à tela inicial.";installHelpDialog.showModal()}}
-function preview(fs,id){const e=document.getElementById(id);clearImages(e);fs.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;setPhoto(im,f);const n=document.createElement("span");n.textContent=i+1;d.append(im,n);e.append(d)})}
+function preview(files,id){
+ const container=document.getElementById(id),crops=id==='conferencePreview'?conferenceCrops:referenceCrops;clearImages(container);
+ files.forEach((blob,i)=>{
+  const d=document.createElement('div');d.className='preview';const im=new Image;setFocusedPhoto(im,blob,crops[i]);const n=document.createElement('span');n.textContent=i+1;d.append(im,n);
+  addFocusButton(d,im,blob,()=>crops[i]||null,rect=>crops[i]=rect);container.append(d);
+ });
+}
 async function compress(f,max=1400,q=.84){const b=await createImageBitmap(f),k=Math.min(1,max/Math.max(b.width,b.height)),w=Math.round(b.width*k),h=Math.round(b.height*k),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(b,0,0,w,h);b.close?.();return new Promise(r=>c.toBlob(x=>r(x||f),"image/jpeg",q))}
 function setupInputs(){
- referenceInput.onchange=()=>task(async()=>{const selected=[...referenceInput.files].slice(0,8),next=[];for(const f of selected)if(f.type.startsWith('image/'))next.push(await compress(f));referenceFiles=next;preview(next,'referencePreview');});
- conferenceInput.onchange=()=>task(async()=>{const selected=[...conferenceInput.files].slice(0,7),next=[];for(const f of selected)if(f.type.startsWith('image/'))next.push(await compress(f));conferenceFiles=next;preview(next,'conferencePreview');clearConferenceBtn.classList.toggle('hidden',!next.length);});
+ referenceInput.onchange=()=>task(async()=>{const selected=[...referenceInput.files].slice(0,8),next=[];for(const f of selected)if(f.type.startsWith('image/'))next.push(await compress(f));referenceFiles=next;referenceCrops=next.map(()=>null);preview(next,'referencePreview');});
+ conferenceInput.onchange=()=>task(async()=>{const selected=[...conferenceInput.files].slice(0,7),next=[];for(const f of selected)if(f.type.startsWith('image/'))next.push(await compress(f));conferenceFiles=next;conferenceCrops=next.map(()=>null);preview(next,'conferencePreview');clearConferenceBtn.classList.toggle('hidden',!next.length);});
  clearConferenceBtn.onclick=()=>{if(!busy)clearConference();};runConferenceBtn.onclick=()=>task(runConference);
 }
-function clearConference(){conferenceFiles=[];conferenceInput.value="";clearImages(conferencePreview);runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden")}
+function clearConference(){conferenceFiles=[];conferenceCrops=[];conferenceInput.value="";clearImages(conferencePreview);runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden")}
 
 async function renderArtworks(){
  let a=[...await all("obras")].sort((x,y)=>y.id-x.id),q=searchKey(searchInput.value);
@@ -74,7 +92,7 @@ async function openEditArtwork(id){
  resetArtworkForm();editingArtworkId=id;editId.value=id;artworkDialogTitle.textContent="Editar obra";deleteArtworkBtn.classList.remove("hidden");
  artworkForm.elements.patrimonio.value=o.patrimonio||"";artworkForm.elements.nome.value=o.nome||"";artworkForm.elements.artista.value=o.artista||"";artworkForm.elements.localizacao.value=o.localizacao||"";artworkForm.elements.descricao.value=o.descricao||"";
  clearImages(existingPhotos);removedPhotoIndexes=new Set();
- if(o.fotos?.length){existingPhotosWrap.classList.remove("hidden");o.fotos.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;setPhoto(im,f);const b=document.createElement("button");b.type="button";b.className="remove-photo";b.textContent="×";b.onclick=()=>{removedPhotoIndexes.add(i);clearImages(d);d.remove();if(existingPhotos.children.length===0)existingPhotosWrap.classList.add("hidden")};d.append(im,b);existingPhotos.append(d)})}
+ if(o.fotos?.length){existingPhotosWrap.classList.remove("hidden");o.fotos.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;setFocusedPhoto(im,f,o.recortes?.[i]);const b=document.createElement("button");b.type="button";b.className="remove-photo";b.textContent="×";b.onclick=()=>{removedPhotoIndexes.add(i);clearImages(d);d.remove();if(existingPhotos.children.length===0)existingPhotosWrap.classList.add("hidden")};d.append(im,b);addFocusButton(d,im,f,()=>existingCropEdits.has(i)?existingCropEdits.get(i):(o.recortes?.[i]||null),rect=>existingCropEdits.set(i,rect));existingPhotos.append(d)})}
  artworkDialog.showModal();
 }
 async function deleteArtwork(id){
@@ -86,9 +104,16 @@ artworkForm.onsubmit=e=>{
  if(!n)return toast("Nome da obra é obrigatório.");
  const allWorks=await all("obras");if(p&&allWorks.some(o=>o.id!==editingArtworkId&&String(o.patrimonio||"").toLowerCase()===p.toLowerCase()))return toast("Patrimônio já cadastrado.");
  let old={fotos:[],descriptors:[]};if(editingArtworkId)old=await requestP(store("obras").get(editingArtworkId))||old;
- const keptFotos=(old.fotos||[]).filter((_,i)=>!removedPhotoIndexes.has(i)),keptDesc=(old.descriptors||[]).filter((_,i)=>!removedPhotoIndexes.has(i));
- const newDesc=[];if(referenceFiles.length)toast("Analisando novas referências…");for(const x of referenceFiles)newDesc.push(await extractSet(x));
- const wasEditing=!!editingArtworkId;const obj={...(editingArtworkId?old:{}),patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),fotos:[...keptFotos,...referenceFiles],descriptors:[...keptFotos.map((_,i)=>keptDesc[i]||null),...newDesc],atualizadoEm:new Date().toISOString()};
+ const keptFotos=[],keptDesc=[],keptCrops=[];
+ for(let i=0;i<(old.fotos||[]).length;i++)if(!removedPhotoIndexes.has(i)){
+  const crop=existingCropEdits.has(i)?existingCropEdits.get(i):(old.recortes?.[i]||null);
+  keptFotos.push(old.fotos[i]);keptCrops.push(crop);
+  const unchanged=JSON.stringify(crop)===JSON.stringify(old.recortes?.[i]||null);
+  keptDesc.push(unchanged&&AcervoMatcher.valid(old.descriptors?.[i])?old.descriptors[i]:await extractSet(await FocusCrop.apply(old.fotos[i],crop)));
+ }
+ const newDesc=[];if(referenceFiles.length)toast('Analisando novas referências…');
+ for(let i=0;i<referenceFiles.length;i++)newDesc.push(await extractSet(await FocusCrop.apply(referenceFiles[i],referenceCrops[i])));
+ const wasEditing=!!editingArtworkId;const obj={...(editingArtworkId?old:{}),patrimonio:p,nome:n,artista:(f.get('artista')||'').trim(),localizacao:(f.get('localizacao')||'').trim(),descricao:(f.get('descricao')||'').trim(),fotos:[...keptFotos,...referenceFiles],recortes:[...keptCrops,...referenceFiles.map((_,i)=>referenceCrops[i]||null)],descriptors:[...keptDesc,...newDesc],atualizadoEm:new Date().toISOString()};
  if(editingArtworkId){obj.id=editingArtworkId;await requestP(store("obras","readwrite").put(obj))}else{obj.criadoEm=new Date().toISOString();await requestP(store("obras","readwrite").add(obj))}
  artworkDialog.close();resetArtworkForm();await renderArtworks();toast(wasEditing?"Obra atualizada.":"Obra salva.");
  });
@@ -101,15 +126,15 @@ async function ensureDescriptors(works){
   for(let i=0;i<o.fotos.length;i++){
    prog(done,total,`Preparando referências ${done+1}/${total}…`);
    if(AcervoMatcher.valid(o.descriptors?.[i]))next.push(o.descriptors[i]);
-   else{next.push(await extractSet(o.fotos[i]));changed=true;}
+   else{next.push(await extractSet(await FocusCrop.apply(o.fotos[i],o.recortes?.[i])));changed=true;}
    done++;
   }
   if(changed){o.descriptors=next;await requestP(store('obras','readwrite').put(o));}
  }
 }
 function prog(d,t,txt){progressWrap.classList.remove('hidden');progressBar.style.width=`${Math.round(d/Math.max(1,t)*100)}%`;progressText.textContent=txt;}
-async function runConference(){
- const files=[...conferenceFiles];if(!files.length)return;
+async function runConference(source=null){
+ const files=[...(source?.files||conferenceFiles)],crops=source?.crops||files.map((_,i)=>conferenceCrops[i]||null);if(!files.length)return;
  const refs=(await all('obras')).filter(o=>o.fotos?.length);
  if(!refs.length)return toast('Cadastre ao menos uma obra com foto.');
  runConferenceBtn.textContent='Analisando…';
@@ -119,12 +144,18 @@ async function runConference(){
   const items=[];
   for(let i=0;i<files.length;i++){
    prog(i,files.length,`Analisando imagem ${i+1} de ${files.length}…`);
-   const result=await Visual.rank(files[i]),top=result.candidates[0];
-   items.push({ordem:i+1,foto:files[i],status:result.automatic?'localizado':'pendente',obraId:result.automatic?top.obraId:null,score:top?.score??null,candidatos:result.candidates,observacao:result.reason,metodo:result.automatic?'automatico':null,versaoMotor:AcervoMatcher.VERSION,margem:result.margin});
+   const result=await Visual.rank(await FocusCrop.apply(files[i],crops[i])),top=result.candidates[0];
+   items.push({ordem:i+1,foto:files[i],recorte:crops[i],status:result.automatic?'localizado':'pendente',obraId:result.automatic?top.obraId:null,score:top?.score??null,candidatos:result.candidates,observacao:result.reason,metodo:result.automatic?'automatico':null,versaoMotor:AcervoMatcher.VERSION,margem:result.margin,motivoDecisao:result.decisionCode,politicaReconhecimento:result.policyVersion});
   }
-  const id=await requestP(store('conferencias','readwrite').add({criadoEm:new Date().toISOString(),items}));
-  clearConference();await renderHistory();await openResult(id);
+  const id=await requestP(store('conferencias','readwrite').add({criadoEm:new Date().toISOString(),items,origemConferencia:source?.conferenceId||null}));
+  if(!source)clearConference();await renderHistory();await openResult(id);
  }finally{runConferenceBtn.textContent='Iniciar conferência';progressWrap.classList.add('hidden');}
+}
+async function reanalyzeConference(id){
+ const conference=await requestP(store('conferencias').get(id));
+ if(!conference?.items?.length)throw new Error('Conferência sem fotos para reanalisar.');
+ if(conference.items.some(item=>!(item.foto instanceof Blob)))throw new Error('Esta conferência não possui todas as fotos originais.');
+ await runConference({files:conference.items.map(item=>item.foto),crops:conference.items.map(item=>item.recorte||null),conferenceId:id});
 }
 
 async function renderHistory(){const cs=(await all("conferencias")).sort((a,b)=>b.id-a.id);historyList.innerHTML="";emptyHistory.classList.toggle("hidden",cs.length>0);cs.forEach(c=>{const l=c.items.filter(i=>i.status==="localizado").length,p=c.items.length-l,card=document.createElement("div");card.className="history-card";card.innerHTML=`<div class=history-main><div class=history-top><b>Conferência #${c.id}</b><span class="status ${p?"pending":"ok"}">${p} pendente(s)</span></div><div class=meta>${new Date(c.criadoEm).toLocaleString("pt-BR")} · ${l} localizada(s)</div></div><div class=mini-actions><button class=mini-delete data-del="${c.id}">Excluir</button></div>`;card.querySelector(".history-main").onclick=()=>openResult(c.id);card.querySelector("[data-del]").onclick=e=>{e.stopPropagation();task(()=>deleteConference(c.id))};historyList.append(card)})}
@@ -143,26 +174,27 @@ async function undoMatch(cid,idx){
 }
 async function openResult(id){
  currentConferenceId=id;const c=await requestP(store('conferencias').get(id));if(!c)return;
+ reanalyzeBtn.onclick=()=>task(()=>reanalyzeConference(id));
  const ws=await all('obras'),mp=new Map(ws.map(o=>[o.id,o])),located=c.items.filter(i=>i.status==='localizado').length;
  resultTitle.textContent=`Conferência #${id}`;
  resultSummary.innerHTML=`<div class=stat><b>${located}</b><span>localizadas</span></div><div class=stat><b>${c.items.length-located}</b><span>pendentes</span></div>`;
  clearImages(resultItems);
  c.items.forEach((it,idx)=>{
-  const d=document.createElement('div');d.className='result-item';const im=new Image;setPhoto(im,it.foto,'Foto da conferência');
+  const d=document.createElement('div');d.className='result-item';const im=new Image;setFocusedPhoto(im,it.foto,it.recorte,'Foto da conferência');
   const t=document.createElement('div'),o=mp.get(it.obraId);
   let h=`<span class="status ${it.status==='localizado'?'ok':'pending'}">${it.status==='localizado'?'LOCALIZADA':'PENDENTE'}</span>`;
   h+=o?`<h4>${esc(o.nome)}</h4><p><b>Patrimônio:</b> ${esc(o.patrimonio||'Não informado')}</p><p>${esc(o.artista||'-')} · ${esc(o.localizacao||'-')}</p>`:`<h4>Imagem ${it.ordem||idx+1}</h4>`;
   if(it.status==='localizado'&&!o)h+='<p>Cadastro da obra removido. A confirmação foi preservada no histórico.</p>';
   if(it.score!=null)h+=`<p><b>Índice visual:</b> ${(it.score*100).toFixed(1)}/100 — não é probabilidade de acerto.</p>`;
-  h+=`<p>${esc(it.observacao||'')}</p>`;
+  h+=`<p>${esc(it.observacao||'')}</p>`;if(it.recorte)h+='<p>Mostrando a área analisada. Foto original preservada no backup.</p>';
   if(it.status==='localizado')h+=`<button class="secondary undo-match" data-undo="${idx}">Revisar / desfazer</button>`;
   t.innerHTML=h;
-  if(o?.fotos?.[0]){const ref=new Image;ref.className='matched-reference';setPhoto(ref,o.fotos[0],'Referência cadastrada');t.append(ref);}
+  if(o?.fotos?.[0]){const ref=new Image;ref.className='matched-reference';setFocusedPhoto(ref,o.fotos[0],o.recortes?.[0],'Referência cadastrada');t.append(ref);}
   if(it.status!=='localizado'){
    const box=document.createElement('div');box.className='candidate-box';box.innerHTML='<b>Compare com as referências</b>';
    for(const x of it.candidatos||[]){
     const work=mp.get(x.obraId);if(!work)continue;
-    const row=document.createElement('div');row.className='candidate';const photo=new Image;setPhoto(photo,work.fotos?.[0],`Referência: ${work.nome}`);
+    const row=document.createElement('div');row.className='candidate';const photo=new Image;setFocusedPhoto(photo,work.fotos?.[0],work.recortes?.[0],`Referência: ${work.nome}`);
     const label=document.createElement('span');label.innerHTML=`${esc(work.nome)} · ${esc(work.patrimonio||'Sem patrimônio')}<br><small>${esc(work.localizacao||'')} · ${(x.score*100).toFixed(1)}/100</small>`;
     const button=document.createElement('button');button.className='confirm';button.textContent='Confirmar';button.onclick=()=>task(()=>confirmCandidate(id,idx,x.obraId));row.append(photo,label,button);box.append(row);
    }
@@ -170,7 +202,7 @@ async function openResult(id){
    for(const work of [...ws].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'))){const option=document.createElement('option');option.value=work.id;option.textContent=`${work.patrimonio||'Sem patrimônio'} · ${work.nome}`;select.append(option);}
    const manualPreview=new Image;manualPreview.className='matched-reference hidden';
    const confirm=document.createElement('button');confirm.className='secondary';confirm.textContent='Confirmar obra selecionada';confirm.disabled=true;
-   select.onchange=()=>{const work=mp.get(Number(select.value));confirm.disabled=!work;manualPreview.classList.toggle('hidden',!work?.fotos?.[0]);if(work?.fotos?.[0])setPhoto(manualPreview,work.fotos[0]);};
+   select.onchange=()=>{const work=mp.get(Number(select.value));confirm.disabled=!work;manualPreview.classList.toggle('hidden',!work?.fotos?.[0]);if(work?.fotos?.[0])setFocusedPhoto(manualPreview,work.fotos[0],work.recortes?.[0]);};
    confirm.onclick=()=>task(()=>confirmCandidate(id,idx,Number(select.value)));box.append(select,manualPreview,confirm);t.append(box);
   }
   d.append(im,t);resultItems.append(d);
@@ -214,7 +246,7 @@ async function importCatalog(file){
   let target=pat?byPat.get(searchKey(pat)):null;
   if(target){
    if(!changed.has(target)){
-    if(!copies.has(target))copies.set(target,{...target,fotos:[...target.fotos||[]],descriptors:(target.fotos||[]).map((_,idx)=>target.descriptors?.[idx]||null),sourceKeys:[...new Set([target.sourceKey,...target.sourceKeys||[]].filter(Boolean))]});
+    if(!copies.has(target))copies.set(target,{...target,fotos:[...target.fotos||[]],descriptors:(target.fotos||[]).map((_,idx)=>target.descriptors?.[idx]||null),recortes:target.recortes?[...target.recortes]:undefined,sourceKeys:[...new Set([target.sourceKey,...target.sourceKeys||[]].filter(Boolean))]});
     target=copies.get(target);byPat.set(searchKey(pat),target);
    }
    merged++;
@@ -226,7 +258,7 @@ async function importCatalog(file){
   status.textContent=`Preparando ${i+1}/${data.obras.length}…`;
   for(const photo of x.fotos){
    const blob=dataUrlBlob(photo.data),hash=await photoHash(blob);if(target.photoHashes.includes(hash))continue;
-   const descriptor=await extractSet(blob);target.fotos.push(blob);target.descriptors.push(descriptor);target.photoHashes.push(hash);photos++;
+   const descriptor=await extractSet(blob);if(target.recortes){while(target.recortes.length<target.fotos.length)target.recortes.push(null);target.recortes.push(null);}target.fotos.push(blob);target.descriptors.push(descriptor);target.photoHashes.push(hash);photos++;
   }
   target.sourceKeys.push(sourceKey);target.atualizadoEm=new Date().toISOString();changed.add(target);sourceSet.add(sourceKey);
  }
@@ -242,7 +274,7 @@ const extractSet=f=>Visual.extract(f);
 
 /* Backup */
 function toData(b){return new Promise((a,z)=>{const r=new FileReader;r.onload=()=>a(r.result);r.onerror=()=>z(r.error);r.readAsDataURL(b)})}const fromData=dataUrlBlob;
-async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.6.0",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Backup exportado.")}
+async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.7.1",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Backup exportado.")}
 async function importBackup(f){
  const data=JSON.parse(await f.text());
  if(data.tipo==='acervo-importacao'){await importCatalog(f);return;}
@@ -251,11 +283,12 @@ async function importBackup(f){
  for(const o of data.obras){
   if(typeof o.nome!=='string'||!Array.isArray(o.fotos))throw new Error('Cadastro inválido no backup.');
   o.fotos=o.fotos.map(fromData);o.descriptors=[];
-  for(const photo of o.fotos)o.descriptors.push(await extractSet(photo));
+  if(o.recortes!=null&&(!Array.isArray(o.recortes)||o.recortes.length!==o.fotos.length||!o.recortes.every(FocusCrop.valid)))throw new Error('Área de referência inválida no backup.');
+  for(let i=0;i<o.fotos.length;i++)o.descriptors.push(await extractSet(await FocusCrop.apply(o.fotos[i],o.recortes?.[i])));
  }
  for(const c of data.conferencias){
   if(!Array.isArray(c.items))throw new Error('Conferência inválida no backup.');
-  for(const item of c.items){if(!item||!['localizado','pendente'].includes(item.status))throw new Error('Resultado inválido no backup.');if(item.foto){item.foto=fromData(item.foto);const bitmap=await createImageBitmap(item.foto);bitmap.close();}}
+  for(const item of c.items){if(!item||!['localizado','pendente'].includes(item.status))throw new Error('Resultado inválido no backup.');if(!FocusCrop.valid(item.recorte))throw new Error('Área de conferência inválida no backup.');if(item.foto){item.foto=fromData(item.foto);const bitmap=await createImageBitmap(item.foto);bitmap.close();}}
  }
  if(!confirm(`Restaurar ${data.obras.length} obras e ${data.conferencias.length} conferências? Esta ação substitui os dados atuais neste aparelho. Exporte um backup antes, se precisar mantê-los.`))return;
  const tx=db.transaction(['obras','conferencias'],'readwrite'),done=transactionDone(tx);

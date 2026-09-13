@@ -1,7 +1,11 @@
 /* Motor local, sem dependências. Usado no Worker e no fallback do navegador. */
 (function (root) {
   'use strict';
-  const VERSION = 3, SIZE = 32;
+  const VERSION = 4, SIZE = 32;
+  // A versão do descritor permanece 4: esta atualização corrige a decisão, não a extração.
+  const POLICY_VERSION='0.7.1-balanced';
+  const POLICY=Object.freeze({score:.90,margin:.065,gray:.88,hash:.84,gradient:.70});
+  const foreground=root.AcervoForeground||(typeof require==='function'?require('./foreground.js'):null);
   const clamp = (x, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
   const unit = a => { const n = Math.hypot(...a); return a.map(x => n > 1e-9 ? x / n : 0); };
   const dot = (a, b) => { let n = 0; for (let i = 0; i < a.length; i++) n += a[i] * b[i]; return n; };
@@ -33,9 +37,25 @@
     const median=[...freq].sort((a,b)=>a-b)[31];
     return {gray:unit(small), gradient:unit(grad), hog:unit(hog), color, hash:freq.map(x=>x>median?1:0).join(''), contrast, energy:energy/225, mean};
   }
-  function valid(d) {
-    return d?.version===VERSION && Number.isFinite(d.aspect) && d.aspect>0 && Array.isArray(d.views) && d.views.length>0 && d.views.length<=20 && d.views.every(v =>
+  function validView(v){return (
       /^[01]{63}$/.test(v?.hash) && [['gray',256],['gradient',450],['hog',128],['color',48]].every(([k,n])=>Array.isArray(v[k])&&v[k].length===n&&v[k].every(Number.isFinite)) && ['contrast','energy','mean'].every(k=>Number.isFinite(v[k])));
+  }
+  function valid(d) {
+    return d?.version===VERSION && Number.isFinite(d.aspect) && d.aspect>0 && Array.isArray(d.views) && d.views.length>0 && d.views.length<=20 && d.views.every(validView) && (!d.foreground||(validView(d.foreground.view)&&Number.isFinite(d.foreground.aspect)&&d.foreground.aspect>0));
+  }
+  function objectView(bitmap){
+    if(!foreground)return null;
+    const k=Math.min(1,160/Math.max(bitmap.width,bitmap.height));
+    const w=Math.max(1,Math.round(bitmap.width*k)),h=Math.max(1,Math.round(bitmap.height*k));
+    const c=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(w,h):Object.assign(document.createElement('canvas'),{width:w,height:h});
+    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(bitmap,0,0,w,h);
+    const pixels=ctx.getImageData(0,0,w,h),result=foreground.segment(pixels.data,w,h);if(!result)return null;
+    for(let i=0;i<result.mask.length;i++)if(!result.mask[i]){pixels.data[i*4]=128;pixels.data[i*4+1]=128;pixels.data[i*4+2]=128;pixels.data[i*4+3]=255;}
+    ctx.putImageData(pixels,0,0);
+    const target=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(32,32):Object.assign(document.createElement('canvas'),{width:32,height:32});
+    const targetCtx=target.getContext('2d',{willReadFrequently:true}),[x,y,ow,oh]=result.box;
+    targetCtx.fillStyle='#808080';targetCtx.fillRect(0,0,32,32);targetCtx.drawImage(c,x,y,ow,oh,1,1,30,30);
+    return {view:describe(targetCtx.getImageData(0,0,32,32).data),aspect:ow/oh};
   }
   async function extract(blob, query=false) {
     const bitmap=await createImageBitmap(blob);
@@ -51,7 +71,7 @@
         ctx.drawImage(bitmap,(bitmap.width-w)/2,(bitmap.height-h)/2,w,h,-16,-16,32,32);ctx.restore();
         views.push(describe(ctx.getImageData(0,0,32,32).data));
       }
-      return {version:VERSION,aspect:bitmap.width/bitmap.height,views};
+      return {version:VERSION,aspect:bitmap.width/bitmap.height,views,foreground:objectView(bitmap)};
     } finally { bitmap.close(); }
   }
   function compare(a,b) {
@@ -69,7 +89,32 @@
       if(a.contrast<.018||b.contrast<.018||a.energy<.008||b.energy<.008)continue;
       const c=compare(a,b);if(c.score>best.score) best=c;
     }
+    if(q.foreground&&r.foreground&&Math.abs(Math.log(q.foreground.aspect/r.foreground.aspect))<.2){
+      const c=compare(q.foreground.view,r.foreground.view);
+      // Desconto pela informação removida. Também pode confirmar quando os detalhes
+      // e a separação entre candidatos atendem ao critério normal de reconhecimento.
+      const score=c.score*.97;
+      if(c.gray>.65&&c.gradient>.45&&score>best.score)best={...c,score,evidence:'foreground'};
+    }
     return best;
+  }
+  function decide(candidates,quality){
+    const top=candidates[0],margin=top?top.score-(candidates[1]?.score||0):0;
+    const lowQuality=!quality||quality.contrast<.025||quality.energy<.012;
+    let code;
+    if(!top)code='empty';
+    else if(lowQuality)code='quality';
+    else if(top.score>=.7&&margin<POLICY.margin)code='ambiguous';
+    else if(['score','gray','hash','gradient'].every(k=>Number.isFinite(top[k])&&top[k]>=POLICY[k])&&margin>=POLICY.margin)code='accepted';
+    else code='weak';
+    const automatic=code==='accepted';
+    const reason=code==='empty'?'Não há referências disponíveis para comparar.':
+      code==='quality'?'Foto com poucos detalhes. Aproxime-se da obra e evite desfoque ou reflexos.':
+      code==='ambiguous'?'Duas obras tiveram resultados próximos. Compare as referências antes de confirmar.':
+      automatic?(top.evidence==='foreground'?'Correspondência automática com redução de fundo. Confira os detalhes da peça.':'Correspondência visual automática. Use “Revisar / desfazer” se a peça estiver incorreta.'):
+      top.score>=.65?'A candidata mais próxima ainda não reúne detalhes suficientes para confirmação automática. Compare a referência ou ajuste a área nas duas fotos.':
+      'Nenhuma correspondência suficiente. Use “Delimitar obra” para reduzir o fundo ou tente uma foto de frente.';
+    return {automatic,margin,lowQuality,reason,decisionCode:code,policyVersion:POLICY_VERSION};
   }
   function rank(query,works) {
     const candidates=works.map(o=>{
@@ -77,17 +122,8 @@
       for(const d of o.descriptors||[])if(valid(d)){const c=pair(query,d);if(c.score>best.score)best=c;}
       return {obraId:o.id,nome:o.nome,patrimonio:o.patrimonio,...best};
     }).sort((a,b)=>b.score-a.score||a.obraId-b.obraId);
-    const top=candidates[0], margin=top?top.score-(candidates[1]?.score||0):0;
-    const quality=query.views[0], lowQuality=quality.contrast<.025||quality.energy<.012;
-    // Limite conservador: preferir revisão humana a confirmar peças parecidas.
-    // É uma heurística; os índices não são probabilidades. Ver VALIDACAO.md.
-    const automatic=!!top&&!lowQuality&&top.score>=.985&&margin>=.065&&top.gray>=.94&&top.hash>=.92&&top.gradient>=.9;
-    const reason=lowQuality?'Foto com poucos detalhes. Aproxime-se da obra e evite desfoque ou reflexos.':
-      top?.score>=.7&&margin<.065?'Obras visualmente parecidas: compare as referências antes de confirmar.':
-      automatic?'Correspondência visual automática. Revise a referência antes de concluir o levantamento.':
-      top?.score>=.65?'Possível correspondência. Confira a foto de referência.':'Nenhuma correspondência segura. Tente uma foto de frente, preenchendo o enquadramento.';
-    return {candidates:candidates.slice(0,5),automatic,margin,lowQuality,reason};
+    return {candidates:candidates.slice(0,5),...decide(candidates,query.views[0])};
   }
-  root.AcervoMatcher={VERSION,describe,valid,extract,compare,pair,rank};
+  root.AcervoMatcher={VERSION,POLICY_VERSION,POLICY,describe,valid,extract,compare,pair,decide,rank};
   if(typeof module!=='undefined')module.exports=root.AcervoMatcher;
 })(globalThis);

@@ -50,5 +50,11 @@ label{display:block;font-size:12px;font-weight:800;margin-top:12px;color:var(--n
 .candidate-box select{width:100%;max-width:100%;padding:10px;margin:10px 0;border:1px solid var(--line);border-radius:10px;background:white;font:inherit}
 .matched-reference{display:block;width:140px;max-width:100%;height:140px;object-fit:contain;margin:10px 0;background:#eef2f7;border-radius:10px}
 .undo-match{padding:8px;font-size:12px;margin-top:6px}
+.preview.has-focus{aspect-ratio:auto;overflow:visible;display:flex;flex-direction:column;gap:4px;background:transparent}
+.preview.has-focus img{aspect-ratio:1;object-fit:contain;min-height:0;border-radius:10px;background:#e5e7eb}
+.focus-button{border:1px solid #b9c8d8;background:white;color:var(--navy);font-size:11px;padding:8px 3px;border-radius:8px;cursor:pointer}
+#focusCanvas{display:block;max-width:100%;height:auto;margin:0 auto;touch-action:none;cursor:crosshair;border-radius:6px}
+.focus-sliders{display:grid;grid-template-columns:1fr 1fr;gap:12px}.focus-sliders input{padding:0}
+#focusDialog .dialog-card{overflow:auto}#focusStatus{font-size:12px}
 .result-item>img{object-fit:contain}
 @media(max-width:480px){.result-item{grid-template-columns:1fr}.result-item>img{width:100%;height:180px}.section-head{flex-wrap:wrap}.search{width:100%}.candidate img{width:56px;height:56px}.toolbar{flex-wrap:wrap}}
