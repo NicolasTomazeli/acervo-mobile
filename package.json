@@ -1,12 +1,11 @@
 {
   "name": "acervo-mobile",
-  "version": "0.7.0",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
-    "test": "node --test tests/matcher.test.cjs tests/foreground.test.cjs",
-    "test:browser": "node tests/smoke.cjs && node tests/extra-tests.cjs && node tests/focus.cjs",
-    "benchmark": "node tests/benchmark.cjs",
-    "test:background": "node tests/background.cjs"
+    "test": "node --test tests/matcher.test.cjs",
+    "test:browser": "node tests/smoke.cjs && node tests/extra-tests.cjs",
+    "benchmark": "node tests/benchmark.cjs"
   },
   "devDependencies": { "playwright": "1.62.1" }
 }

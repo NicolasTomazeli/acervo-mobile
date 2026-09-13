@@ -1,55 +1,47 @@
-# Acervo Mobile 0.7.0
+# Acervo Mobile 0.6.0
 
-Atualização dedicada à interferência do fundo nas fotos. Mantém cadastro, importação, backup, conferências e processamento local das versões anteriores.
+Versão aprimorada do projeto fornecido. Mantém o uso local no navegador e a compatibilidade com o JSON de importação 0.5.1 e os backups antigos.
 
-## Para testar a garrafa com outro fundo
+## O que mudou
 
-1. No cadastro da peça, toque em **Editar** e depois em **Delimitar obra**, abaixo da foto de referência.
-2. Arraste um retângulo envolvendo a peça inteira, deixando pouco fundo. Toque em **Usar esta área** e depois em **Salvar alterações**.
-3. Na nova conferência, escolha a foto e use **Delimitar obra** para enquadrar a mesma peça inteira. Inicie a conferência.
-4. Compare as referências sugeridas. Resultados incertos ficam pendentes; você pode confirmar, escolher outra obra ou desfazer uma identificação.
+- Reconhecimento mais resistente a mudanças de luz e enquadramento; confirmação automática conservadora e sugestões para revisão.
+- Miniaturas das referências, desfazer identificação e seleção de qualquer obra para confirmação manual.
+- Motor em Worker, descritores menores, busca com acentos normalizados e carregamento da lista em lotes de 60.
+- Importação reúne fotos de linhas com o mesmo patrimônio; imagens idênticas no mesmo cadastro não se repetem.
+- Importação em lote atômica e restauração de backup validada antes da substituição. Falhas liberam os controles.
+- Correção do carregamento offline: um arquivo JavaScript indisponível não recebe HTML no lugar dele.
 
-O retângulo pode ser ajustado por toque/mouse ou pelos controles em **Ajustar pelas margens**. **Foto inteira** desfaz a seleção; **Cancelar** mantém o enquadramento anterior. Não é necessário cortar as fotos em outro aplicativo.
+## Colocar no lugar da versão atual
 
-## Redução automática de fundo
+1. No aplicativo atual, exporte um **backup completo** e guarde o JSON.
+2. Extraia o ZIP. Substitua os arquivos do site pelo conteúdo desta pasta no mesmo endereço de hospedagem. Inclua obrigatoriamente `matcher.js`, `matcher-worker.js` e `visual-client.js`, além dos arquivos já existentes. Não é necessário executar npm para publicar ou usar o app.
+3. Depois da atualização, feche todas as abas/janelas do Acervo e abra novamente com internet. Confira a versão **0.6.0** em Ajustes. O Service Worker deixa a versão anterior terminar de ser usada antes de ativar a nova.
+4. Os dados do aparelho continuam no mesmo banco. As referências antigas são atualizadas na primeira conferência. Se mudar de navegador, aparelho ou domínio, importe o backup guardado.
+5. Para acrescentar as fotos que a versão antiga descartava em linhas repetidas, importe novamente o **JSON de importação original** em Ajustes → Importar acervo em lote. Em uma base vazia, o arquivo fornecido resulta em 348 cadastros e 374 fotos.
 
-O motor procura uma região de fundo de cor aproximadamente uniforme, conectada às bordas da foto, e compara também o objeto restante em um enquadramento normalizado. Isso ajuda quando a parede muda de cor ou a peça aparece em outro tamanho/posição.
+O ZIP contém código e documentação. O JSON do acervo não é embutido no site: use o arquivo original enviado. A análise das fotos suspeitas foi entregue separadamente, porque exige conferência do responsável pelo acervo.
 
-Essa análise é auxiliar: não é uma IA que entende qualquer objeto e não promete remover cenários complexos. Quando o fundo não atende aos critérios, a comparação original continua disponível. Uma sugestão obtida somente por essa redução de fundo **sempre exige confirmação manual**, porque descartar pixels pode eliminar detalhes importantes.
+## Usar a conferência
 
-Para fundos estampados, objetos transparentes, reflexos, sombras fortes ou peça pouco contrastante, use a seleção manual e deixe pouco fundo nos dois lados da comparação. Se a foto já foi tirada muito de longe, selecionar a área não cria os detalhes que faltam.
+Use uma foto por obra, de frente, com a obra ocupando boa parte da imagem. Escolha até sete fotos por conferência. O app ordena cinco candidatos e mostra referências para comparação. Quando a correspondência não atende ao limite conservador, fica pendente. É possível selecionar outra obra do acervo ou deixar pendente.
 
-## Fotos e compatibilidade
+“Índice visual” é uma medida de semelhança, não uma probabilidade de acerto. Para peças semelhantes ou fotos associadas ao cadastro errado, confira patrimônio e detalhes da peça. A versão não localiza várias obras numa foto de sala inteira.
 
-- A seleção é não destrutiva: o banco mantém a foto original, o retângulo selecionado e os descritores da área usada. Não salva uma nova foto comprimida sobre o original.
-- O resultado mostra a área analisada. O backup exporta a foto original e as seleções de referências e conferências.
-- Os backups antigos e o JSON de importação 0.5.1 continuam aceitos. A restauração valida as seleções antes de substituir dados.
-- O banco mantém nome e versão de esquema. Descritores antigos são recalculados na primeira análise ou ao salvar uma referência editada.
-- A importação continua reunindo fotos de linhas com o mesmo patrimônio, sem repetir arquivos idênticos.
+## Testar localmente
 
-## Atualizar o site
+Na pasta extraída, execute `python -m http.server 8000 --bind 127.0.0.1` e abra `http://127.0.0.1:8000`. Não abra `index.html` por duplo clique: câmera, Worker e instalação offline dependem da origem do site. No celular, utilize a hospedagem HTTPS habitual.
 
-1. Exporte um backup completo da versão em uso.
-2. Extraia o ZIP e substitua o conteúdo do site pelos arquivos desta pasta no mesmo endereço. Inclua também os novos `foreground.js` e `focus-crop.js`; não precisa executar npm para usar ou publicar.
-3. Feche todas as abas e janelas do Acervo e abra novamente com internet. Confirme a versão **0.7.0** em Ajustes. A nova versão do cache assume depois que as abas antigas forem fechadas.
-4. Depois do primeiro carregamento, a seleção de área e a análise funcionam offline.
+## Testes para desenvolvimento
 
-O acervo não está embutido no código. Para uma instalação vazia, use o JSON original enviado. No mesmo navegador e domínio, o banco existente é reaproveitado.
-
-## Desenvolvimento e testes
-
-Para abrir localmente: execute `python -m http.server 8000 --bind 127.0.0.1` nesta pasta e acesse `http://127.0.0.1:8000`. No celular, use a hospedagem HTTPS habitual. Abrir `index.html` por duplo clique não habilita todas as funções.
-
-Com Node.js, `npm test` executa oito testes unitários. Para testes em Chrome instalado:
+Com Node.js instalado, `npm test` executa os cinco testes unitários sem dependências adicionais. Os testes de navegador usam Chrome instalado e Playwright 1.62.1:
 
 ```powershell
 npm install
 $env:ACERVO_CATALOG = "C:\caminho\acervo_importacao_base_obras_gpt_v0_5_1.json"
 npm run test:browser
-npm run test:background
 npm run benchmark
 ```
 
-Os scripts usam um navegador de teste isolado e um servidor temporário restrito a localhost. Os resultados ficam em `.test-results/`. O teste de importação espera as contagens da base fornecida. O arquivo `tests/matcher-v3.js` preserva o motor 0.6.0 apenas para comparação no teste de fundos; não é carregado pelo aplicativo.
+Os scripts iniciam um servidor temporário restrito a localhost e usam um navegador de teste isolado. Resultados ficam em `.test-results/`. Os testes funcionais verificam as contagens específicas da base fornecida; outro acervo exige adaptar essas expectativas.
 
-Leia `VALIDACAO.md`: os testes sintéticos ajudam a detectar regressões, mas ainda não medem a precisão real com fotos novas no trabalho.
+Leia `VALIDACAO.md` para os resultados, a metodologia e as limitações. Os testes com transformações artificiais melhoraram, mas a precisão em campo ainda precisa ser medida com fotos novas de celular.
