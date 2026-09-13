@@ -47,11 +47,12 @@
     <div class="hero">
       <span class="pill">1 a 7 imagens</span>
       <h2>Nova conferência</h2>
-      <p>Tire fotos ou escolha imagens da galeria. O processamento acontece no aparelho.</p>
+      <p>Use uma foto por obra, de frente e com a obra preenchendo a imagem. Evite reflexos e fotos da sala inteira. O processamento acontece no aparelho.</p>
     </div>
 
     <div class="card">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
+      <p class="muted">Se o fundo mudou, use <b>Delimitar obra</b> na foto e na referência cadastrada. Inclua a peça inteira, com pouco fundo ao redor.</p>
       <div id="conferencePreview" class="preview-grid"></div>
       <div class="actions">
         <button id="clearConferenceBtn" class="secondary hidden">Limpar</button>
@@ -59,7 +60,7 @@
       </div>
       <div id="progressWrap" class="progress-wrap hidden">
         <div class="progress"><div id="progressBar"></div></div>
-        <div id="progressText" class="muted">Preparando…</div>
+        <div id="progressText" class="muted" role="status" aria-live="polite">Preparando…</div>
       </div>
     </div>
   </section>
@@ -89,7 +90,7 @@
 
     <div class="card">
       <h3>Importar acervo em lote</h3>
-      <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas e duplicidades são ignoradas.</p>
+      <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas. Linhas do mesmo patrimônio são reunidas e suas fotos complementares são acrescentadas, sem repetir imagens idênticas.</p>
       <button id="importCatalogBtn" class="primary full">Importar arquivo do acervo</button>
       <input id="importCatalogFile" type="file" accept="application/json,.json" hidden>
       <div id="importCatalogStatus" class="muted import-status"></div>
@@ -113,7 +114,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.5.2</b> — importação em lote + edição de obras + reconhecimento visual.</p>
+      <p class="muted">Acervo Mobile <b>0.7.0</b> — redução de fundo uniforme, seleção da área da obra e reconhecimento local.</p>
     </div>
   </section>
 </main>
@@ -170,7 +171,11 @@
   </div>
 </dialog>
 
-<div id="toast" class="toast"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="./foreground.js"></script>
+<script src="./matcher.js"></script>
+<script src="./visual-client.js"></script>
+<script src="./focus-crop.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

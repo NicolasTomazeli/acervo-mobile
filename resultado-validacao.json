@@ -1,0 +1,99 @@
+{
+  "results": [
+    {
+      "kind": "original",
+      "count": 335,
+      "oldTop": 325,
+      "newTop": 335,
+      "oldAuto": 287,
+      "newAuto": 312,
+      "oldWrong": 0,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "light",
+      "count": 335,
+      "oldTop": 324,
+      "newTop": 334,
+      "oldAuto": 278,
+      "newAuto": 71,
+      "oldWrong": 0,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "dark",
+      "count": 335,
+      "oldTop": 114,
+      "newTop": 334,
+      "oldAuto": 49,
+      "newAuto": 150,
+      "oldWrong": 3,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "margin",
+      "count": 335,
+      "oldTop": 222,
+      "newTop": 324,
+      "oldAuto": 70,
+      "newAuto": 0,
+      "oldWrong": 4,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "rotate",
+      "count": 335,
+      "oldTop": 316,
+      "newTop": 318,
+      "oldAuto": 244,
+      "newAuto": 0,
+      "oldWrong": 0,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "crop",
+      "count": 335,
+      "oldTop": 221,
+      "newTop": 323,
+      "oldAuto": 119,
+      "newAuto": 0,
+      "oldWrong": 3,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    },
+    {
+      "kind": "blur",
+      "count": 335,
+      "oldTop": 329,
+      "newTop": 328,
+      "oldAuto": 298,
+      "newAuto": 32,
+      "oldWrong": 0,
+      "newWrong": 0,
+      "oldMs": 3,
+      "newMs": 9
+    }
+  ],
+  "negatives": {
+    "withheld": 335,
+    "oldFalse": 32,
+    "newFalse": 2,
+    "blank": 5,
+    "blankFalse": 0
+  },
+  "catalog": {
+    "works": 348,
+    "photos": 374
+  }
+}
