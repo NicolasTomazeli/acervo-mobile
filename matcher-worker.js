@@ -1,4 +1,4 @@
-importScripts('./foreground.js','./matcher.js');
+importScripts('./matcher.js');
 let catalog=[];
 self.onmessage=async({data:{id,type,payload}})=>{
   try {

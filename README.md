@@ -1,47 +1,33 @@
-# Acervo Mobile 0.6.0
+# Acervo Mobile 0.7.2 — reconhecimento original restaurado
 
-Versão aprimorada do projeto fornecido. Mantém o uso local no navegador e a compatibilidade com o JSON de importação 0.5.1 e os backups antigos.
+Esta edição recupera o cálculo visual e os critérios de confirmação do projeto enviado originalmente. As versões 0.6 e 0.7 trocaram esse motor e introduziram condições que deixavam casos reconhecidos pelo original como pendentes. A recuperação mantém o processamento em segundo plano, os recortes manuais, a importação que reúne fotos do mesmo patrimônio e a preservação dos dados.
 
-## O que mudou
+## Como atualizar no GitHub
 
-- Reconhecimento mais resistente a mudanças de luz e enquadramento; confirmação automática conservadora e sugestões para revisão.
-- Miniaturas das referências, desfazer identificação e seleção de qualquer obra para confirmação manual.
-- Motor em Worker, descritores menores, busca com acentos normalizados e carregamento da lista em lotes de 60.
-- Importação reúne fotos de linhas com o mesmo patrimônio; imagens idênticas no mesmo cadastro não se repetem.
-- Importação em lote atômica e restauração de backup validada antes da substituição. Falhas liberam os controles.
-- Correção do carregamento offline: um arquivo JavaScript indisponível não recebe HTML no lugar dele.
+1. No aplicativo atual, use Ajustes → Exportar backup.
+2. Extraia `acervo-mobile-v0.7.2-original-github.zip` e envie **o conteúdo extraído**, substituindo os arquivos de mesmo nome na raiz do repositório. Não envie apenas o ZIP nem crie uma subpasta para esta versão. Inclua `sw.js` e a pasta `icons`.
+3. Aguarde a publicação do GitHub Pages terminar com sucesso em Actions.
+4. Abra o aplicativo com internet, feche todas as abas do site e o aplicativo instalado e abra novamente. Em Ajustes deve aparecer **0.7.2 — reconhecimento do projeto original restaurado**.
+5. Para testar resultados antigos, use **Reanalisar fotos**. A nova conferência será salva separadamente. Os descritores serão preparados automaticamente na primeira análise, sem apagar fotos, IDs ou histórico.
 
-## Colocar no lugar da versão atual
+Não precisa importar o acervo novamente, limpar os dados do site ou reinstalar. O banco continua sendo `acervo-mobile-db`, versão 2, na mesma origem e no mesmo perfil do navegador. Arquivos antigos de testes ou `foreground.js` que já estejam no repositório não são carregados pelo aplicativo desta edição.
 
-1. No aplicativo atual, exporte um **backup completo** e guarde o JSON.
-2. Extraia o ZIP. Substitua os arquivos do site pelo conteúdo desta pasta no mesmo endereço de hospedagem. Inclua obrigatoriamente `matcher.js`, `matcher-worker.js` e `visual-client.js`, além dos arquivos já existentes. Não é necessário executar npm para publicar ou usar o app.
-3. Depois da atualização, feche todas as abas/janelas do Acervo e abra novamente com internet. Confira a versão **0.6.0** em Ajustes. O Service Worker deixa a versão anterior terminar de ser usada antes de ativar a nova.
-4. Os dados do aparelho continuam no mesmo banco. As referências antigas são atualizadas na primeira conferência. Se mudar de navegador, aparelho ou domínio, importe o backup guardado.
-5. Para acrescentar as fotos que a versão antiga descartava em linhas repetidas, importe novamente o **JSON de importação original** em Ajustes → Importar acervo em lote. Em uma base vazia, o arquivo fornecido resulta em 348 cadastros e 374 fotos.
+## O que foi restaurado
 
-O ZIP contém código e documentação. O JSON do acervo não é embutido no site: use o arquivo original enviado. A análise das fotos suspeitas foi entregue separadamente, porque exige conferência do responsável pelo acervo.
+- Imagem inteira preservando proporção e recorte central quadrado, como no original.
+- Mesmos quatro cruzamentos entre as duas representações das fotos.
+- Mesmos pesos de hash médio (22%), cores (25%), tons normalizados (31%) e contornos (22%).
+- Confirmação a partir de 0,82 e diferença de pelo menos 0,035 para a segunda obra; com uma única candidata, vale o limite de pontuação original.
+- Sem os bloqueios adicionais de pHash, gradientes e qualidade introduzidos nas versões seguintes. A redução automática de fundo também deixou de participar da comparação. A delimitação manual permanece disponível.
 
-## Usar a conferência
+Os descritores antigos são recalculados a partir das fotos preservadas. Imagens uniformes, que produziam divisões por zero no código original, ficam pendentes com índice numérico em vez de contaminar a ordenação com NaN.
 
-Use uma foto por obra, de frente, com a obra ocupando boa parte da imagem. Escolha até sete fotos por conferência. O app ordena cinco candidatos e mostra referências para comparação. Quando a correspondência não atende ao limite conservador, fica pendente. É possível selecionar outra obra do acervo ou deixar pendente.
+## Limites
 
-“Índice visual” é uma medida de semelhança, não uma probabilidade de acerto. Para peças semelhantes ou fotos associadas ao cadastro errado, confira patrimônio e detalhes da peça. A versão não localiza várias obras numa foto de sala inteira.
+Esta é uma recuperação do comportamento original, não uma alegação de aumento geral de precisão. O motor original também pode errar e continua sensível a iluminação e fundo. Duas referências muito parecidas ainda podem exigir confirmação. Os testes não incluem novas fotos reais do celular do usuário. Consulte o relatório de validação para os erros observados e a metodologia.
 
-## Testar localmente
+## Desenvolvimento e testes
 
-Na pasta extraída, execute `python -m http.server 8000 --bind 127.0.0.1` e abra `http://127.0.0.1:8000`. Não abra `index.html` por duplo clique: câmera, Worker e instalação offline dependem da origem do site. No celular, utilize a hospedagem HTTPS habitual.
+O código completo e os testes ficam na pasta `acervo-mobile-v0.7.2-original` entregue junto do ZIP. O ZIP de publicação contém apenas os arquivos necessários ao site e este README.
 
-## Testes para desenvolvimento
-
-Com Node.js instalado, `npm test` executa os cinco testes unitários sem dependências adicionais. Os testes de navegador usam Chrome instalado e Playwright 1.62.1:
-
-```powershell
-npm install
-$env:ACERVO_CATALOG = "C:\caminho\acervo_importacao_base_obras_gpt_v0_5_1.json"
-npm run test:browser
-npm run benchmark
-```
-
-Os scripts iniciam um servidor temporário restrito a localhost e usam um navegador de teste isolado. Resultados ficam em `.test-results/`. Os testes funcionais verificam as contagens específicas da base fornecida; outro acervo exige adaptar essas expectativas.
-
-Leia `VALIDACAO.md` para os resultados, a metodologia e as limitações. Os testes com transformações artificiais melhoraram, mas a precisão em campo ainda precisa ser medida com fotos novas de celular.
+Para testar localmente: `python -m http.server 8000 --bind 127.0.0.1` nesta pasta; abra http://127.0.0.1:8000. Para os testes automatizados, instale as dependências com `npm install`, tenha Chrome instalado e defina `ACERVO_CATALOG` como o caminho do JSON original. Execute `npm test`, `npm run test:browser` e `npm run benchmark`. O catálogo pessoal não está incluído nos pacotes.

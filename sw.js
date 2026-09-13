@@ -1,5 +1,5 @@
-const CACHE='acervo-v0.7.1';
-const ASSETS=['./','./index.html','./style.css','./app.js','./matcher.js','./foreground.js','./focus-crop.js','./visual-client.js','./matcher-worker.js','./manifest.webmanifest','./icons/icon-192.png'];
+const CACHE='acervo-v0.7.2';
+const ASSETS=['./','./index.html','./style.css','./app.js','./matcher.js','./focus-crop.js','./visual-client.js','./matcher-worker.js','./manifest.webmanifest','./icons/icon-192.png'];
 const assetURLs=new Set(ASSETS.map(p=>new URL(p,self.registration.scope).href));
 // A nova versão só assume depois de fechar as abas antigas, evitando misturar motores.
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
