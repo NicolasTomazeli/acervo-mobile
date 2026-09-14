@@ -47,12 +47,11 @@
     <div class="hero">
       <span class="pill">1 a 7 imagens</span>
       <h2>Nova conferência</h2>
-      <p>Use uma foto por obra, de frente e com a obra preenchendo a imagem. Evite reflexos e fotos da sala inteira. O processamento acontece no aparelho.</p>
+      <p>Tire fotos ou escolha imagens da galeria. O processamento acontece no aparelho.</p>
     </div>
 
     <div class="card">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
-      <p class="muted">Se o fundo mudou, use <b>Delimitar obra</b> na foto e na referência cadastrada. Inclua a peça inteira, com pouco fundo ao redor.</p>
       <div id="conferencePreview" class="preview-grid"></div>
       <div class="actions">
         <button id="clearConferenceBtn" class="secondary hidden">Limpar</button>
@@ -60,7 +59,7 @@
       </div>
       <div id="progressWrap" class="progress-wrap hidden">
         <div class="progress"><div id="progressBar"></div></div>
-        <div id="progressText" class="muted" role="status" aria-live="polite">Preparando…</div>
+        <div id="progressText" class="muted">Preparando…</div>
       </div>
     </div>
   </section>
@@ -71,8 +70,6 @@
       <h2>Conferências</h2>
       <p>Abra um período para revisar os resultados ou exportar seu relatório.</p>
     </div>
-
-    <div id="resultsStats" class="stats"></div>
 
     <div class="toolbar">
       <button id="exportLatestBtn" class="primary">Exportar último período</button>
@@ -92,7 +89,7 @@
 
     <div class="card">
       <h3>Importar acervo em lote</h3>
-      <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas. Linhas do mesmo patrimônio são reunidas e suas fotos complementares são acrescentadas, sem repetir imagens idênticas.</p>
+      <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas e duplicidades são ignoradas.</p>
       <button id="importCatalogBtn" class="primary full">Importar arquivo do acervo</button>
       <input id="importCatalogFile" type="file" accept="application/json,.json" hidden>
       <div id="importCatalogStatus" class="muted import-status"></div>
@@ -115,9 +112,8 @@
     </div>
 
     <div class="card">
-      <h3>Reconhecimento</h3>
-      <p class="muted">Acervo Mobile <b>0.7.4</b> — confirmação automática a partir de 94/100 de semelhança visual.</p>
-      <p class="muted">A nota compara padrões, contornos, tons e cores. Não é uma probabilidade de acerto. A partir de 94/100, a melhor candidata é confirmada mesmo quando existe outra referência próxima.</p>
+      <h3>Versão</h3>
+      <p class="muted">Acervo Mobile <b>0.6</b> — importação em lote + edição de obras + reconhecimento visual.</p>
     </div>
   </section>
 </main>
@@ -162,8 +158,6 @@
       <button id="exportCurrentCsvBtn" class="secondary grow">Exportar CSV</button>
       <button id="deleteCurrentBtn" class="danger grow">Excluir conferência</button>
     </div>
-    <button id="reanalyzeBtn" class="primary full" style="margin-top:14px">Reanalisar fotos</button>
-    <p class="muted">Cria uma nova conferência com estas fotos e mantém o resultado anterior no histórico.</p>
     <div id="resultItems" class="result-list"></div>
   </div>
 </dialog>
@@ -176,11 +170,7 @@
   </div>
 </dialog>
 
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="./foreground.js"></script>
-<script src="./matcher.js"></script>
-<script src="./visual-client.js"></script>
-<script src="./focus-crop.js"></script>
+<div id="toast" class="toast"></div>
 <script src="./app.js"></script>
 </body>
 </html>

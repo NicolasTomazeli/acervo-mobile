@@ -1,0 +1,17 @@
+ATUALIZAÇÃO PARA V0.6
+
+1. Antes de atualizar, no app V0.5.2 use Ajustes > Exportar backup.
+2. Guarde também o ZIP V0.5.2 como rollback.
+3. Extraia acervo_mobile_v0_6.zip.
+4. No GitHub, abra o repositório acervo-mobile.
+5. Add file > Upload files.
+6. Substitua index.html, app.js, style.css, manifest.webmanifest, sw.js e icons.
+7. Commit changes.
+8. Aguarde GitHub Pages publicar.
+9. Feche o app/PWA e abra novamente.
+10. Em Ajustes confirme versão 0.6.
+11. Não reimporte as 370 obras se elas já estão no celular: o IndexedDB existente é preservado.
+12. Faça primeiro um teste com 5 a 10 imagens conhecidas.
+13. Depois teste imagens difíceis e imagens que NÃO pertencem ao acervo.
+14. Observe o diagnóstico V0.6 nos resultados.
+15. Se houver regressão crítica, publique novamente os arquivos da V0.5.2 e restaure o backup somente se necessário.
