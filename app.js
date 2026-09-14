@@ -2,7 +2,8 @@
 const DB_NAME="acervo-mobile-db", DB_VERSION=2;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
 const V06={TOP_K:5,MIN_GOOD:8,MIN_INLIERS:6,LOCALIZED_RATIO:.38,PROBABLE_RATIO:.22,MIN_COVERAGE:.025};
-let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set();
+let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],conferenceOriginalFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set();
+let cropIndex=0,cropSelection=null,cropImage=null,cropDisplay={scale:1};
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
 function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
@@ -27,8 +28,63 @@ function setupDialogs(){
 function setupInstall(){if(standalone())installBtn.classList.add("installed");window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferredPrompt=e});window.addEventListener("appinstalled",()=>installBtn.classList.add("installed"));installBtn.onclick=async()=>{if(deferredPrompt){deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;return}installHelpText.textContent=/iphone|ipad|ipod/i.test(navigator.userAgent)?"No Safari: Compartilhar → Adicionar à Tela de Início.":"No Chrome: menu ⋮ → Instalar app / Adicionar à tela inicial.";installHelpDialog.showModal()}}
 function preview(fs,id){const e=document.getElementById(id);e.innerHTML="";fs.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const n=document.createElement("span");n.textContent=i+1;d.append(im,n);e.append(d)})}
 async function compress(f,max=1400,q=.84){const b=await createImageBitmap(f),k=Math.min(1,max/Math.max(b.width,b.height)),w=Math.round(b.width*k),h=Math.round(b.height*k),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(b,0,0,w,h);b.close?.();return new Promise(r=>c.toBlob(x=>r(x||f),"image/jpeg",q))}
-function setupInputs(){referenceInput.onchange=async()=>{referenceFiles=[];for(const f of [...referenceInput.files].slice(0,8))if(f.type.startsWith("image/"))referenceFiles.push(await compress(f));preview(referenceFiles,"referencePreview")};conferenceInput.onchange=async()=>{conferenceFiles=[];for(const f of [...conferenceInput.files].slice(0,7))if(f.type.startsWith("image/"))conferenceFiles.push(await compress(f));preview(conferenceFiles,"conferencePreview");runConferenceBtn.disabled=!conferenceFiles.length;clearConferenceBtn.classList.toggle("hidden",!conferenceFiles.length)};clearConferenceBtn.onclick=clearConference;runConferenceBtn.onclick=runConference}
-function clearConference(){conferenceFiles=[];conferenceInput.value="";conferencePreview.innerHTML="";runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden")}
+function setupInputs(){
+ referenceInput.onchange=async()=>{referenceFiles=[];for(const f of [...referenceInput.files].slice(0,8))if(f.type.startsWith("image/"))referenceFiles.push(await compress(f));preview(referenceFiles,"referencePreview")};
+ conferenceInput.onchange=async()=>{
+   conferenceFiles=[];conferenceOriginalFiles=[];
+   for(const f of [...conferenceInput.files].slice(0,7))if(f.type.startsWith("image/")){const c=await compress(f);conferenceFiles.push(c);conferenceOriginalFiles.push(c)}
+   previewConference();runConferenceBtn.disabled=!conferenceFiles.length;clearConferenceBtn.classList.toggle("hidden",!conferenceFiles.length);
+   demarcationTools.classList.toggle("hidden",!conferenceFiles.length);restoreOriginalBtn.classList.add("hidden");qualityMessage.classList.add("hidden");
+   if(conferenceFiles.length)await refreshQuality(0)
+ };
+ clearConferenceBtn.onclick=clearConference;runConferenceBtn.onclick=runConference;demarcateBtn.onclick=()=>openCropper(0);restoreOriginalBtn.onclick=restoreOriginal;
+}
+function previewConference(){
+ preview(conferenceFiles,"conferencePreview");
+ [...conferencePreview.children].forEach((d,i)=>{d.style.cursor="pointer";d.title="Toque para demarcar esta imagem";d.onclick=()=>openCropper(i)});
+}
+function clearConference(){conferenceFiles=[];conferenceOriginalFiles=[];conferenceInput.value="";conferencePreview.innerHTML="";runConferenceBtn.disabled=true;clearConferenceBtn.classList.add("hidden");demarcationTools.classList.add("hidden");restoreOriginalBtn.classList.add("hidden");qualityMessage.classList.add("hidden")}
+
+
+async function imageQuality(blob){
+ const b=await bmp(blob),c=canv(b,256,"crop"),d=c.getContext("2d",{willReadFrequently:true}).getImageData(0,0,256,256).data,g=gray(d);b.close?.();
+ let sum=0,sum2=0,n=0;for(let y=1;y<255;y+=2)for(let x=1;x<255;x+=2){const v=4*g[y*256+x]-g[y*256+x-1]-g[y*256+x+1]-g[(y-1)*256+x]-g[(y+1)*256+x];sum+=v;sum2+=v*v;n++}
+ const mean=sum/n,variance=Math.max(0,sum2/n-mean*mean),contrast=sd(g,avg(g))*255;
+ return{sharpness:variance,contrast}
+}
+async function refreshQuality(index){
+ if(!conferenceFiles[index])return;const q=await imageQuality(conferenceFiles[index]);let cls="quality-box",msg=`Qualidade: nitidez ${q.sharpness.toFixed(0)} · contraste ${q.contrast.toFixed(0)}`;
+ if(q.sharpness<180){cls+=" warn";msg="⚠️ Foto possivelmente desfocada. Considere refazer ou demarcar melhor a obra."}
+ else if(q.contrast<24){cls+=" warn";msg="⚠️ Contraste baixo. Reflexo ou iluminação podem reduzir a identificação."}
+ qualityMessage.className=cls;qualityMessage.textContent=msg;qualityMessage.classList.remove("hidden")
+}
+async function openCropper(index){
+ cropIndex=index;cropSelection=null;cropApplyBtn.disabled=true;cropMeta.textContent="Arraste para selecionar a obra.";
+ const blob=conferenceOriginalFiles[index]||conferenceFiles[index];cropImage=await createImageBitmap(blob);
+ const maxW=Math.min(680,window.innerWidth-54),maxH=Math.min(560,window.innerHeight*.56),s=Math.min(maxW/cropImage.width,maxH/cropImage.height,1);
+ cropCanvas.width=Math.max(1,Math.round(cropImage.width*s));cropCanvas.height=Math.max(1,Math.round(cropImage.height*s));cropDisplay.scale=s;drawCrop();cropDialog.showModal()
+}
+function normRect(r){return{x:Math.min(r.x1,r.x2),y:Math.min(r.y1,r.y2),w:Math.abs(r.x2-r.x1),h:Math.abs(r.y2-r.y1)}}
+function drawCrop(){
+ const x=cropCanvas.getContext("2d");x.clearRect(0,0,cropCanvas.width,cropCanvas.height);x.drawImage(cropImage,0,0,cropCanvas.width,cropCanvas.height);
+ if(cropSelection){const r=normRect(cropSelection);x.save();x.fillStyle="rgba(8,47,99,.38)";x.beginPath();x.rect(0,0,cropCanvas.width,cropCanvas.height);x.rect(r.x,r.y,r.w,r.h);x.fill("evenodd");x.strokeStyle="#F2B705";x.lineWidth=3;x.strokeRect(r.x,r.y,r.w,r.h);x.restore()}
+}
+function canvasPoint(e){const r=cropCanvas.getBoundingClientRect();return{x:(e.clientX-r.left)*cropCanvas.width/r.width,y:(e.clientY-r.top)*cropCanvas.height/r.height}}
+let cropDragging=false;
+function setupCropper(){
+ cropCanvas.addEventListener("pointerdown",e=>{const p=canvasPoint(e);cropDragging=true;cropSelection={x1:p.x,y1:p.y,x2:p.x,y2:p.y};cropCanvas.setPointerCapture(e.pointerId);drawCrop()});
+ cropCanvas.addEventListener("pointermove",e=>{if(!cropDragging)return;const p=canvasPoint(e);cropSelection.x2=p.x;cropSelection.y2=p.y;const r=normRect(cropSelection);cropApplyBtn.disabled=r.w<30||r.h<30;cropMeta.textContent=`Área selecionada: ${Math.round(r.w)} × ${Math.round(r.h)} px`;drawCrop()});
+ cropCanvas.addEventListener("pointerup",()=>cropDragging=false);
+ cropResetBtn.onclick=()=>{cropSelection=null;cropApplyBtn.disabled=true;cropMeta.textContent="Selecione uma área.";drawCrop()};
+ cropApplyBtn.onclick=applyCrop;
+}
+async function applyCrop(){
+ if(!cropSelection)return;const r=normRect(cropSelection),scale=cropDisplay.scale,sx=r.x/scale,sy=r.y/scale,sw=r.w/scale,sh=r.h/scale;
+ const c=document.createElement("canvas"),max=1400,k=Math.min(1,max/Math.max(sw,sh));c.width=Math.max(1,Math.round(sw*k));c.height=Math.max(1,Math.round(sh*k));
+ c.getContext("2d").drawImage(cropImage,sx,sy,sw,sh,0,0,c.width,c.height);
+ const blob=await new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",.88));conferenceFiles[cropIndex]=blob;previewConference();restoreOriginalBtn.classList.remove("hidden");cropDialog.close();await refreshQuality(cropIndex);toast("Demarcação aplicada.")
+}
+async function restoreOriginal(){conferenceFiles=[...conferenceOriginalFiles];previewConference();restoreOriginalBtn.classList.add("hidden");await refreshQuality(0);toast("Fotos originais restauradas.")}
 
 async function renderArtworks(){
  let a=(await all("obras")).sort((x,y)=>y.id-x.id),q=searchInput.value.toLowerCase().trim();
@@ -177,7 +233,7 @@ function grayCanvas(b,size=320){
  for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=.299*d[i]+.587*d[i+1]+.114*d[i+2];
  return{g,w,h}
 }
-function localFeaturesFromGray(g,w,h,maxPts=180){
+function localFeaturesFromGray(g,w,h,maxPts=220){
  const cand=[],step=4;
  for(let y=9;y<h-9;y+=step)for(let x=9;x<w-9;x+=step){
    const gx=g[y*w+x+1]-g[y*w+x-1],gy=g[(y+1)*w+x]-g[(y-1)*w+x],lap=Math.abs(4*g[y*w+x]-g[y*w+x-1]-g[y*w+x+1]-g[(y-1)*w+x]-g[(y+1)*w+x]);
@@ -236,4 +292,4 @@ async function exportBackup(){const obras=[],cs=[];for(const o of await all("obr
 async function importBackup(f){const d=JSON.parse(await f.text());if(d.tipo==="acervo-importacao"&&Array.isArray(d.obras)){await importCatalog(f);return}const t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
 function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
-(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
+(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupCropper();setupActions();setupCatalogImport();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();

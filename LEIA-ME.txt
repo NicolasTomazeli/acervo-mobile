@@ -1,23 +1,16 @@
-ACERVO MOBILE V0.6 — MOTOR HÍBRIDO EXPERIMENTAL
+ACERVO MOBILE V0.6.5 — DEMARCAÇÃO + QUALIDADE + VERIFICAÇÃO HÍBRIDA
 
-Objetivo:
-Aumentar a precisão sem alterar o cadastro, importação, backup, CSV ou fluxo principal do aplicativo.
+Mudanças:
+- Demarcação manual retangular da área da obra antes da análise.
+- Toque em qualquer miniatura da conferência para demarcar aquela imagem.
+- Botão para restaurar a foto original.
+- Controle simples de qualidade por nitidez e contraste.
+- Verificador local aumentado de até 180 para até 220 pontos de interesse.
+- Mantém Top 5 + matching local + RANSAC/consistência geométrica.
+- Mantém Localizada / Provável / Não identificada.
+- Preserva as obras e conferências existentes.
 
-Motor V0.6:
-1. O motor visual existente recupera os 5 candidatos mais próximos.
-2. O app extrai pontos locais da foto consultada e das referências candidatas.
-3. Faz correspondência binária local com ratio test.
-4. Verifica consistência geométrica com RANSAC usando transformação afim.
-5. Classifica o resultado em:
-   LOCALIZADA
-   PROVÁVEL
-   NÃO IDENTIFICADA
+Limite atual:
+A V0.6.5 ainda não aplica correção de perspectiva por quatro cantos. A demarcação retangular já permite medir isoladamente o ganho de remover fundo e contexto. Se o benchmark justificar, a próxima evolução será quadrilátero + homografia.
 
-Importante:
-- Esta V0.6 é experimental e deve ser comparada com a V0.5.2.
-- O verificador implementado é uma alternativa leve inspirada em ORB + RANSAC, feita em JavaScript puro para continuar funcionando no GitHub Pages sem servidor.
-- Não é OpenCV ORB nativo. A decisão de incorporar OpenCV.js ou modelo neural será tomada depois do benchmark.
-- Na primeira conferência, referências ainda sem features locais são calculadas e armazenadas. As seguintes ficam mais rápidas.
-- O resultado mostra diagnóstico: score global, margem, matches, inliers, razão de inliers e cobertura.
-
-Não apague a V0.5.2 do seu backup local.
+O motor continua 100% client-side, sem API externa.

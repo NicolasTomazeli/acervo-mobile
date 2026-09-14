@@ -53,6 +53,11 @@
     <div class="card">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
       <div id="conferencePreview" class="preview-grid"></div>
+      <div id="demarcationTools" class="demarcation-tools hidden">
+        <button id="demarcateBtn" type="button" class="secondary grow">✂️ Demarcar obra</button>
+        <button id="restoreOriginalBtn" type="button" class="secondary hidden">Usar foto original</button>
+      </div>
+      <div id="qualityMessage" class="quality-box hidden"></div>
       <div class="actions">
         <button id="clearConferenceBtn" class="secondary hidden">Limpar</button>
         <button id="runConferenceBtn" class="primary grow" disabled>Iniciar conferência</button>
@@ -113,7 +118,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.6</b> — importação em lote + edição de obras + reconhecimento visual.</p>
+      <p class="muted">Acervo Mobile <b>0.6.5</b> — importação em lote + edição de obras + reconhecimento visual.</p>
     </div>
   </section>
 </main>
@@ -170,6 +175,21 @@
   </div>
 </dialog>
 
+<dialog id="cropDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Pré-processamento</span><h2>Demarcar a obra</h2></div>
+      <button type="button" class="x" data-close="cropDialog">✕</button>
+    </div>
+    <p class="muted">Arraste sobre a imagem para selecionar somente a região da obra.</p>
+    <div class="crop-stage"><canvas id="cropCanvas"></canvas></div>
+    <div class="crop-meta" id="cropMeta">Selecione uma área.</div>
+    <div class="actions">
+      <button id="cropResetBtn" type="button" class="secondary">Redefinir</button>
+      <button id="cropApplyBtn" type="button" class="primary grow" disabled>Aplicar demarcação</button>
+    </div>
+  </div>
+</dialog>
 <div id="toast" class="toast"></div>
 <script src="./app.js"></script>
 </body>
