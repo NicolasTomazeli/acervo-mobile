@@ -1,1 +1,22 @@
-const C="acervo-v0.5.2";const A=["./","./index.html","./style.css","./app.js","./manifest.webmanifest","./icons/icon-192.png","./icons/icon-512.png"];self.addEventListener("install",e=>{self.skipWaiting();e.waitUntil(caches.open(C).then(c=>c.addAll(A)))});self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));self.addEventListener("fetch",e=>{if(e.request.method!=="GET")return;const u=new URL(e.request.url),fresh=e.request.mode==="navigate"||/app\.js$|style\.css$|manifest\.webmanifest$/.test(u.pathname);e.respondWith((fresh?fetch(e.request,{cache:"no-store"}):caches.match(e.request).then(r=>r||fetch(e.request))).then(r=>{const q=r.clone();caches.open(C).then(c=>c.put(e.request,q));return r}).catch(()=>caches.match("./index.html")))})
+const CACHE='acervo-v0.7.4';
+const ASSETS=['./','./index.html','./style.css','./app.js','./matcher.js','./foreground.js','./focus-crop.js','./visual-client.js','./matcher-worker.js','./manifest.webmanifest','./icons/icon-192.png'];
+const assetURLs=new Set(ASSETS.map(p=>new URL(p,self.registration.scope).href));
+// A nova versão só assume depois de fechar as abas antigas, evitando misturar motores.
+self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS))));
+self.addEventListener('activate',event=>event.waitUntil((async()=>{
+ for(const key of await caches.keys())if(key.startsWith('acervo-v')&&key!==CACHE)await caches.delete(key);
+ await self.clients.claim();
+})()));
+self.addEventListener('fetch',event=>{
+ if(event.request.method!=='GET')return;
+ const u=new URL(event.request.url);u.search='';
+ if(u.origin!==self.location.origin||!u.href.startsWith(self.registration.scope))return;
+ if(!assetURLs.has(u.href)&&event.request.mode!=='navigate')return;
+ event.respondWith((async()=>{
+  const cache=await caches.open(CACHE);
+  const key=event.request.mode==='navigate'?new URL('./index.html',self.registration.scope).href:u.href;
+  const cached=await cache.match(key);if(cached)return cached;
+  // Nunca devolve HTML no lugar de JavaScript ou CSS.
+  return fetch(event.request);
+ })());
+});
