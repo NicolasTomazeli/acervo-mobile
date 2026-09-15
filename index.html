@@ -123,7 +123,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.5.3</b> — importação em lote + edição de obras + reconhecimento visual.</p>
+      <p class="muted">Acervo Mobile <b>0.5.5</b> — importação em lote + edição de obras + reconhecimento visual + recorte da obra.</p>
     </div>
   </section>
 </main>
@@ -147,8 +147,8 @@
     <label>Localização</label><input name="localizacao">
     <label>Descrição</label><textarea name="descricao" rows="3"></textarea>
     <label>Fotos de referência</label><input id="referenceInput" type="file" accept="image/*" capture="environment" multiple>
-    <div id="existingPhotosWrap" class="hidden"><label>Fotos atuais</label><div id="existingPhotos" class="preview-grid editable-photos"></div></div><div id="referencePreview" class="preview-grid"></div>
-    <p class="muted">Recomendado: 2 ou 3 fotos da obra, com enquadramentos ligeiramente diferentes.</p>
+    <div id="existingPhotosWrap" class="hidden"><label>Fotos atuais <small class="muted">(toque em ✂️ pra recortar)</small></label><div id="existingPhotos" class="preview-grid editable-photos"></div></div><div id="referencePreview" class="preview-grid"></div>
+    <p class="muted">Recomendado: 2 ou 3 fotos da obra, com enquadramentos ligeiramente diferentes. Ao adicionar fotos novas, você poderá recortar cada uma pra marcar só a obra, sem fundo.</p>
     <div class="actions sticky">
       <button type="button" id="deleteArtworkBtn" class="danger hidden">Excluir obra</button>
       <button type="button" class="secondary" data-close="artworkDialog">Cancelar</button>
@@ -169,6 +169,43 @@
       <button id="deleteCurrentBtn" class="danger grow">Excluir conferência</button>
     </div>
     <div id="resultItems" class="result-list"></div>
+  </div>
+</dialog>
+
+<dialog id="compareDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Comparar</span><h2 id="compareTitle">Foto tirada × referência</h2></div>
+      <button type="button" class="x" data-close="compareDialog">✕</button>
+    </div>
+    <div class="compare-grid">
+      <div class="compare-col"><small>Foto da conferência</small><img id="compareQueryImg"></div>
+      <div class="compare-col"><small>Foto cadastrada</small><img id="compareRefImg"></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="cropDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Recorte</span><h2 id="cropTitle">Demarcar a obra</h2></div>
+    </div>
+    <p class="muted">Arraste os cantos pra marcar só a obra, sem parede/piso ao redor. Isso melhora muito o reconhecimento.</p>
+    <div id="cropStageWrap">
+    <div id="cropStage">
+      <img id="cropImg" draggable="false">
+      <div id="cropRect">
+        <div class="crop-handle" data-h="nw"></div>
+        <div class="crop-handle" data-h="ne"></div>
+        <div class="crop-handle" data-h="sw"></div>
+        <div class="crop-handle" data-h="se"></div>
+      </div>
+    </div>
+    </div>
+    <div class="actions sticky">
+      <button type="button" id="cropSkipBtn" class="secondary">Usar foto inteira</button>
+      <button type="button" id="cropConfirmBtn" class="primary grow">Confirmar recorte</button>
+    </div>
   </div>
 </dialog>
 
