@@ -89,6 +89,35 @@ async function exportCsv(confId=null){
 }
 
 
+
+/* V0.5.3 — gerenciamento independente do acervo */
+async function exportCatalogOnly(){
+ const obras=await all("obras");if(!obras.length)return toast("Não há obras para exportar.");
+ const payload={tipo:"acervo-mobile-catalogo",versao:"0.5.3",exportadoEm:new Date().toISOString(),totalObras:obras.length,obras};
+ downloadBlob(new Blob([JSON.stringify(payload)],{type:"application/json"}),`acervo-mobile-${new Date().toISOString().slice(0,10)}.json`);
+ catalogManageStatus.innerHTML=`Exportado: <strong>${obras.length}</strong> obra(s).`;toast("Acervo exportado.")
+}
+async function importCatalogOnly(file){
+ const data=JSON.parse(await file.text()),incoming=Array.isArray(data.obras)?data.obras:null;if(!incoming)throw new Error("Arquivo sem lista de obras.");
+ const current=await all("obras");let replace=false;
+ if(current.length){replace=confirm(`Já existem ${current.length} obra(s).\n\nOK = SUBSTITUIR o acervo atual\nCancelar = ADICIONAR ao acervo atual`);if(replace&&!confirm("Confirma SUBSTITUIR o acervo atual? Exporte uma cópia antes se necessário."))return}
+ if(replace)await requestP(store("obras","readwrite").clear());
+ const existing=replace?[]:current,pats=new Set(existing.map(o=>String(o.patrimonio||"").trim().toLowerCase()).filter(Boolean));let added=0,skipped=0;
+ for(const raw of incoming){const o={...raw};delete o.id;const pat=String(o.patrimonio||"").trim().toLowerCase();if(!replace&&pat&&pats.has(pat)){skipped++;continue}await requestP(store("obras","readwrite").add(o));if(pat)pats.add(pat);added++}
+ await renderArtworks();catalogManageStatus.innerHTML=`Concluído: <strong>${added}</strong> obra(s) importada(s)${skipped?`, ${skipped} duplicidade(s) ignorada(s)`:""}.`;toast("Acervo importado.")
+}
+async function deleteCatalogOnly(){
+ const obras=await all("obras");if(!obras.length)return toast("O acervo já está vazio.");
+ if(!confirm(`Excluir ${obras.length} obra(s), incluindo fotos e referências?\n\nAs conferências serão preservadas.`))return;
+ if(!confirm("CONFIRMA A EXCLUSÃO DO ACERVO?\n\nEsta ação só pode ser revertida por arquivo exportado/backup."))return;
+ await requestP(store("obras","readwrite").clear());await renderArtworks();catalogManageStatus.textContent="Acervo excluído. Conferências preservadas.";toast("Acervo excluído.")
+}
+function setupCatalogManagement(){
+ exportCatalogBtn.onclick=exportCatalogOnly;importCatalogOnlyBtn.onclick=()=>importCatalogOnlyFile.click();
+ importCatalogOnlyFile.onchange=async()=>{const f=importCatalogOnlyFile.files[0];if(!f)return;try{await importCatalogOnly(f)}catch(e){console.error(e);catalogManageStatus.textContent="Falha: "+(e.message||"arquivo incompatível");toast("Falha ao importar acervo.")}finally{importCatalogOnlyFile.value=""}};
+ deleteCatalogBtn.onclick=deleteCatalogOnly
+}
+
 /* Importação de acervo preparada a partir do Excel */
 function dataUrlBlob(u){const [h,d]=u.split(","),mime=(h.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(d),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:mime})}
 async function importCatalog(file){
@@ -133,4 +162,4 @@ async function exportBackup(){const obras=[],cs=[];for(const o of await all("obr
 async function importBackup(f){const d=JSON.parse(await f.text());if(d.tipo==="acervo-importacao"&&Array.isArray(d.obras)){await importCatalog(f);return}const t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
 function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
-(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
+(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCatalogManagement();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();

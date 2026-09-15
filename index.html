@@ -96,6 +96,16 @@
     </div>
 
     <div class="card">
+      <h3>Gerenciar acervo</h3>
+      <p class="muted">Exporte, importe ou exclua somente as obras e suas fotos/referências. As conferências ficam separadas.</p>
+      <button id="exportCatalogBtn" class="secondary full">Exportar acervo</button>
+      <button id="importCatalogOnlyBtn" class="secondary full">Importar acervo</button>
+      <input id="importCatalogOnlyFile" type="file" accept="application/json,.json" hidden>
+      <button id="deleteCatalogBtn" class="danger full">Excluir acervo</button>
+      <div id="catalogManageStatus" class="muted import-status"></div>
+    </div>
+
+    <div class="card">
       <h3>Backup completo</h3>
       <p class="muted">Mantém obras, imagens e conferências para restauração futura.</p>
       <div class="actions">
@@ -113,7 +123,7 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.5.2</b> — importação em lote + edição de obras + reconhecimento visual.</p>
+      <p class="muted">Acervo Mobile <b>0.5.3</b> — importação em lote + edição de obras + reconhecimento visual.</p>
     </div>
   </section>
 </main>
