@@ -88,6 +88,18 @@
     </div>
 
     <div class="card">
+      <h3>Armazenamento local</h3>
+      <p class="muted">Este app não usa servidor nem internet para guardar seus dados: tudo fica salvo direto no navegador deste aparelho. Se os dados sumirem, geralmente é o sistema/navegador limpando o armazenamento — veja abaixo e no LEIA-ME desta versão como reduzir esse risco.</p>
+      <div id="storageStatus"></div>
+    </div>
+
+    <div class="card">
+      <h3>Técnicas / estilos de obra</h3>
+      <p class="muted">Gerencie as opções que aparecem no campo "Técnica" do cadastro de obras.</p>
+      <button type="button" id="manageTecnicasBtn" class="secondary full">Gerenciar técnicas</button>
+    </div>
+
+    <div class="card">
       <h3>Importar acervo em lote</h3>
       <p class="muted">Importe um arquivo preparado a partir do Excel, incluindo dados e fotos. Obras já existentes são preservadas e duplicidades são ignoradas.</p>
       <button id="importCatalogBtn" class="primary full">Importar arquivo do acervo</button>
@@ -145,12 +157,7 @@
     <label>Nome da obra *</label><input name="nome" required>
     <label>Artista</label><input name="artista">
     <label>Técnica</label>
-    <select name="tecnica">
-      <option value="">Selecione</option>
-      <option value="Pintura">Pintura</option>
-      <option value="Escultura">Escultura</option>
-      <option value="Cerâmica">Cerâmica</option>
-    </select>
+    <select name="tecnica"><option value="">Selecione</option></select>
     <label>Localização</label><input name="localizacao">
     <label>Descrição</label><textarea name="descricao" rows="3"></textarea>
     <label>Fotos de referência</label><input id="referenceInput" type="file" accept="image/*" capture="environment" multiple>
@@ -188,6 +195,20 @@
     <div class="compare-grid">
       <div class="compare-col"><small>Foto da conferência</small><img id="compareQueryImg"></div>
       <div class="compare-col"><small>Foto cadastrada</small><img id="compareRefImg"></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="tecnicasDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Ajustes</span><h2>Técnicas / estilos</h2></div>
+      <button type="button" class="x" data-close="tecnicasDialog">✕</button>
+    </div>
+    <div id="tecnicasList" class="tag-list"></div>
+    <div class="add-row">
+      <input id="novaTecnicaInput" placeholder="Nova técnica ou estilo (ex.: Gravura)">
+      <button type="button" id="addTecnicaBtn" class="primary">+</button>
     </div>
   </div>
 </dialog>

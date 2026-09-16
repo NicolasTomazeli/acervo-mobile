@@ -1,12 +1,30 @@
 
-const DB_NAME="acervo-mobile-db", DB_VERSION=2;
+const DB_NAME="acervo-mobile-db", DB_VERSION=3;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
+const DEFAULT_TECNICAS=["Pintura","Escultura","Cerâmica"];
 let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set(),cropStateData=null,editedFotos=[],editedDescs=[];
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
 function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
 async function all(n){return requestP(store(n).getAll())}
-async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){d.createObjectStore("obras",{keyPath:"id",autoIncrement:true})}else{const s=r.transaction.objectStore("obras");if(s.indexNames.contains("patrimonio"))s.deleteIndex("patrimonio")}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
+async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=e=>{const d=e.target.result;if(!d.objectStoreNames.contains("obras")){d.createObjectStore("obras",{keyPath:"id",autoIncrement:true})}else{const s=r.transaction.objectStore("obras");if(s.indexNames.contains("patrimonio"))s.deleteIndex("patrimonio")}if(!d.objectStoreNames.contains("conferencias"))d.createObjectStore("conferencias",{keyPath:"id",autoIncrement:true});if(!d.objectStoreNames.contains("config"))d.createObjectStore("config",{keyPath:"chave"})};r.onsuccess=e=>a(e.target.result);r.onerror=e=>b(e.target.error)})}
+async function getTecnicas(){const r=await requestP(store("config").get("tecnicas"));return (r&&Array.isArray(r.valores)&&r.valores.length)?r.valores:DEFAULT_TECNICAS.slice()}
+async function saveTecnicas(arr){await requestP(store("config","readwrite").put({chave:"tecnicas",valores:arr}))}
+async function populateTecnicaSelect(currentValue){const sel=artworkForm.elements.tecnica,list=await getTecnicas(),extra=(currentValue&&!list.includes(currentValue))?[currentValue]:[];sel.innerHTML=`<option value="">Selecione</option>`+[...list,...extra].map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");sel.value=currentValue||""}
+async function ensureStoragePersisted(){if(!navigator.storage?.persist)return;try{const already=await navigator.storage.persisted();if(!already)await navigator.storage.persist()}catch{}}
+async function renderStorageStatus(){
+ if(!storageStatus)return;
+ try{
+  const persisted=navigator.storage?.persisted?await navigator.storage.persisted():null;
+  const est=navigator.storage?.estimate?await navigator.storage.estimate():null;
+  const mb=n=>((n||0)/1048576).toFixed(1)+" MB";
+  const ub=await requestP(store("config").get("ultimoBackup")).catch(()=>null);
+  let backupMsg;
+  if(!ub){backupMsg=`<p class="backup-warn">Você ainda não exportou um backup nesta versão. Recomendo fazer isso agora, em "Backup completo" abaixo.</p>`}
+  else{const dias=Math.floor((Date.now()-new Date(ub.valor).getTime())/86400000);backupMsg=dias>7?`<p class="backup-warn">Último backup há ${dias} dias. Recomendo exportar um novo em "Backup completo" abaixo.</p>`:`<p class="muted">Último backup: há ${dias===0?"menos de 1 dia":dias+" dia(s)"}.</p>`}
+  storageStatus.innerHTML=`<p class="muted">Armazenamento protegido contra limpeza automática: <b>${persisted===null?"não suportado neste navegador":(persisted?"sim":"não")}</b></p>`+(est?`<p class="muted">Uso local: <b>${mb(est.usage)}</b> de ${mb(est.quota)} disponíveis neste aparelho.</p>`:"")+(standalone()?"":`<p class="muted">Dica: use o app pela tela instalada (ícone adicionado à tela inicial), não pelo navegador comum — reduz o risco de limpeza automática dos dados.</p>`)+backupMsg;
+ }catch{storageStatus.innerHTML=""}
+}
 function toast(m){const e=document.getElementById("toast");e.textContent=m;e.classList.add("show");clearTimeout(window.__t);window.__t=setTimeout(()=>e.classList.remove("show"),2300)}
 const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 const url=b=>b?URL.createObjectURL(b):"";
@@ -19,7 +37,7 @@ function resetArtworkForm(){
  referencePreview.innerHTML="";deleteArtworkBtn.classList.add("hidden");
 }
 function setupDialogs(){
- newArtworkBtn.onclick=()=>{resetArtworkForm();artworkDialog.showModal()};
+ newArtworkBtn.onclick=()=>{resetArtworkForm();populateTecnicaSelect();artworkDialog.showModal()};
  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
  deleteArtworkBtn.onclick=()=>editingArtworkId&&deleteArtwork(editingArtworkId);
 }
@@ -74,7 +92,7 @@ async function renderArtworks(){
 async function openEditArtwork(id){
  const o=await requestP(store("obras").get(id));if(!o)return;
  resetArtworkForm();editingArtworkId=id;editId.value=id;artworkDialogTitle.textContent="Editar obra";deleteArtworkBtn.classList.remove("hidden");
- artworkForm.elements.patrimonio.value=o.patrimonio||"";artworkForm.elements.nome.value=o.nome||"";artworkForm.elements.artista.value=o.artista||"";artworkForm.elements.tecnica.value=o.tecnica||"";artworkForm.elements.localizacao.value=o.localizacao||"";artworkForm.elements.descricao.value=o.descricao||"";
+ artworkForm.elements.patrimonio.value=o.patrimonio||"";artworkForm.elements.nome.value=o.nome||"";artworkForm.elements.artista.value=o.artista||"";await populateTecnicaSelect(o.tecnica||"");artworkForm.elements.localizacao.value=o.localizacao||"";artworkForm.elements.descricao.value=o.descricao||"";
  existingPhotos.innerHTML="";removedPhotoIndexes=new Set();editedFotos=[...(o.fotos||[])];editedDescs=[...(o.descriptors||[])];
  if(o.fotos?.length){existingPhotosWrap.classList.remove("hidden");o.fotos.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const b=document.createElement("button");b.type="button";b.className="remove-photo";b.textContent="×";b.onclick=()=>{removedPhotoIndexes.add(i);d.remove();if(existingPhotos.children.length===0)existingPhotosWrap.classList.add("hidden")};const rc=document.createElement("button");rc.type="button";rc.className="recrop-photo";rc.title="Recortar";rc.textContent="✂️";rc.onclick=async()=>{const newBlob=await openCropTool(editedFotos[i],"Recortar foto cadastrada");editedFotos[i]=newBlob;editedDescs[i]=await extractSet(newBlob);im.src=url(newBlob);toast("Foto recortada — salve para confirmar.")};d.append(im,b,rc);existingPhotos.append(d)})}
  artworkDialog.showModal();
@@ -198,8 +216,30 @@ function setSim(a,b){return Math.max(sim(a.full,b.full),sim(a.full,b.crop),sim(a
 
 /* Backup */
 function toData(b){return new Promise((a,z)=>{const r=new FileReader;r.onload=()=>a(r.result);r.onerror=()=>z(r.error);r.readAsDataURL(b)})}function fromData(u){const [h,d]=u.split(","),m=(h.match(/:(.*?);/)||[])[1]||"image/jpeg",bin=atob(d),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return new Blob([a],{type:m})}
-async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.4",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();toast("Backup exportado.")}
+async function exportBackup(){const obras=[],cs=[];for(const o of await all("obras")){const x={...o,fotos:[]};for(const f of o.fotos||[])x.fotos.push(await toData(f));obras.push(x)}for(const c of await all("conferencias")){const x={...c,items:[]};for(const i of c.items)x.items.push({...i,foto:i.foto?await toData(i.foto):null});cs.push(x)}const b=new Blob([JSON.stringify({version:"0.4",createdAt:new Date().toISOString(),obras,conferencias:cs})],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`acervo-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();await requestP(store("config","readwrite").put({chave:"ultimoBackup",valor:new Date().toISOString()}));renderStorageStatus();toast("Backup exportado.")}
 async function importBackup(f){const d=JSON.parse(await f.text());if(d.tipo==="acervo-importacao"&&Array.isArray(d.obras)){await importCatalog(f);return}const t1=db.transaction("obras","readwrite"),s1=t1.objectStore("obras");s1.clear();for(const o of d.obras||[]){o.fotos=(o.fotos||[]).map(fromData);s1.put(o)}await new Promise((a,b)=>{t1.oncomplete=a;t1.onerror=b});const t2=db.transaction("conferencias","readwrite"),s2=t2.objectStore("conferencias");s2.clear();for(const c of d.conferencias||[]){for(const i of c.items||[])if(typeof i.foto==="string")i.foto=fromData(i.foto);s2.put(c)}await new Promise((a,b)=>{t2.oncomplete=a;t2.onerror=b});renderArtworks();renderHistory();toast("Backup restaurado.")}
+async function renderTecnicasDialog(){
+ const list=await getTecnicas();
+ tecnicasList.innerHTML=list.length?"":`<p class="muted">Nenhuma técnica cadastrada ainda.</p>`;
+ list.forEach((t,i)=>{
+  const chip=document.createElement("div");chip.className="tag-chip";
+  const span=document.createElement("span");span.textContent=t;
+  const rm=document.createElement("button");rm.type="button";rm.textContent="✕";rm.title="Remover";
+  rm.onclick=async()=>{const cur=await getTecnicas();cur.splice(i,1);await saveTecnicas(cur);renderTecnicasDialog()};
+  chip.append(span,rm);tecnicasList.append(chip);
+ });
+}
+function setupTecnicas(){
+ manageTecnicasBtn.onclick=()=>{renderTecnicasDialog();novaTecnicaInput.value="";tecnicasDialog.showModal()};
+ async function addNow(){
+  const v=novaTecnicaInput.value.trim();if(!v)return;
+  const cur=await getTecnicas();
+  if(cur.some(x=>x.toLowerCase()===v.toLowerCase()))return toast("Essa técnica já existe.");
+  cur.push(v);await saveTecnicas(cur);novaTecnicaInput.value="";renderTecnicasDialog();toast("Técnica adicionada.");
+ }
+ addTecnicaBtn.onclick=addNow;
+ novaTecnicaInput.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();addNow()}};
+}
 function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
 
-(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCatalogManagement();setupCropTool();renderArtworks();renderHistory();if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
+(async()=>{db=await openDB();setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCatalogManagement();setupCropTool();setupTecnicas();renderArtworks();renderHistory();ensureStoragePersisted().then(renderStorageStatus);if("serviceWorker"in navigator){navigator.serviceWorker.register("./sw.js").then(r=>r.update()).catch(console.warn)}})();
