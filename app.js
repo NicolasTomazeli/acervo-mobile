@@ -213,7 +213,7 @@ async function runConference(){
   const top=cs[0],second=cs[1],margin=second?top.score-second.score:top.score,ok=top&&top.score>=AUTO_THRESHOLD&&(cs.length===1||margin>=MIN_MARGIN);
   let divergente=false;
   if(ok){const refObra=refsMap.get(top.obraId);if(refObra){const ef=efetivoLocal(refObra);divergente=(ef.filial!==filialConferida)||(ef.localizacao!==localConferido)}}
-  items.push({ordem:i+1,foto:conferenceFiles[i],status:ok?"localizado":"pendente",obraId:ok?top.obraId:null,score:top?.score??null,candidatos:cs.slice(0,3),localizacaoDivergente:divergente,divergenciaResolvida:!divergente,observacao:ok?`Correspondência automática com ${top.nome}.`:(top?.score>=REVIEW_THRESHOLD?`Possível correspondência com ${top.nome}.`:"Nenhuma correspondência segura.")});
+  items.push({ordem:i+1,foto:conferenceFiles[i],status:ok?"localizado":"pendente",obraId:ok?top.obraId:null,score:top?.score??null,candidatos:cs.slice(0,4),localizacaoDivergente:divergente,divergenciaResolvida:!divergente,observacao:ok?`Correspondência automática com ${top.nome}.`:(top?.score>=REVIEW_THRESHOLD?`Possível correspondência com ${top.nome}.`:"Nenhuma correspondência segura.")});
   await new Promise(r=>setTimeout(r,0));
  }
  prog(conferenceFiles.length,conferenceFiles.length,"Concluído.");

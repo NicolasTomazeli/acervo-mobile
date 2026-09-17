@@ -99,7 +99,7 @@ label{display:block;font-size:12px;font-weight:800;margin-top:12px;color:var(--n
 .dash-back{border:0;background:none;color:var(--navy2);font-weight:800;padding:4px 0 12px;text-align:left}
 .dash-catalog{display:grid;gap:10px}
 .dash-item{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px}
-.dash-item img{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#E7EEF6;flex:none}
+.dash-item img{width:108px;height:108px;object-fit:cover;border-radius:14px;background:#E7EEF6;flex:none}
 .dash-item-info{display:flex;flex-direction:column;gap:2px;min-width:0}
 .dash-item-info b{color:var(--navy);font-size:14px}
 .dash-item-info .meta{margin:0}
