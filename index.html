@@ -51,6 +51,14 @@
     </div>
 
     <div class="card">
+      <label>Filial que está sendo conferida</label>
+      <select id="confFilialSelect"><option value="">Selecione</option></select>
+      <label>Local</label>
+      <select id="confLocalSelect"><option value="">Selecione</option></select>
+      <p class="muted">Se uma obra identificada estiver cadastrada em outro local, você poderá atualizar o cadastro depois de ver o resultado.</p>
+    </div>
+
+    <div class="card">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
       <div id="conferencePreview" class="preview-grid"></div>
       <div class="actions">
@@ -80,6 +88,15 @@
     <div id="emptyHistory" class="empty">Nenhuma conferência realizada.</div>
   </section>
 
+  <section id="view-paineis" class="view">
+    <div class="hero compact">
+      <span class="pill">Visão geral</span>
+      <h2>Painéis</h2>
+      <p>Acompanhe o acervo por filial e localização.</p>
+    </div>
+    <div id="dashboardRoot"></div>
+  </section>
+
   <section id="view-ajustes" class="view">
     <div class="hero compact">
       <span class="pill">Segurança</span>
@@ -94,9 +111,15 @@
     </div>
 
     <div class="card">
-      <h3>Técnicas / estilos de obra</h3>
-      <p class="muted">Gerencie as opções que aparecem no campo "Técnica" do cadastro de obras.</p>
-      <button type="button" id="manageTecnicasBtn" class="secondary full">Gerenciar técnicas</button>
+      <h3>Estilos de obra</h3>
+      <p class="muted">Gerencie as opções que aparecem no campo "Estilo" do cadastro de obras.</p>
+      <button type="button" id="manageEstilosBtn" class="secondary full">Gerenciar estilos</button>
+    </div>
+
+    <div class="card">
+      <h3>Filiais e locais</h3>
+      <p class="muted">Gerencie as filiais e, dentro de cada uma, os locais disponíveis para cadastro e conferência. Cada local pertence a apenas uma filial.</p>
+      <button type="button" id="manageFiliaisBtn" class="secondary full">Gerenciar filiais e locais</button>
     </div>
 
     <div class="card">
@@ -108,18 +131,8 @@
     </div>
 
     <div class="card">
-      <h3>Gerenciar acervo</h3>
-      <p class="muted">Exporte, importe ou exclua somente as obras e suas fotos/referências. As conferências ficam separadas.</p>
-      <button id="exportCatalogBtn" class="secondary full">Exportar acervo</button>
-      <button id="importCatalogOnlyBtn" class="secondary full">Importar acervo</button>
-      <input id="importCatalogOnlyFile" type="file" accept="application/json,.json" hidden>
-      <button id="deleteCatalogBtn" class="danger full">Excluir acervo</button>
-      <div id="catalogManageStatus" class="muted import-status"></div>
-    </div>
-
-    <div class="card">
       <h3>Backup completo</h3>
-      <p class="muted">Mantém obras, imagens e conferências para restauração futura.</p>
+      <p class="muted">Mantém obras, imagens, documentos e conferências para restauração futura.</p>
       <div class="actions">
         <button id="exportBtn" class="primary grow">Exportar backup</button>
         <button id="importBtn" class="secondary grow">Importar backup</button>
@@ -129,13 +142,28 @@
 
     <div class="card">
       <h3>Relatório CSV</h3>
-      <p class="muted">Gera uma planilha do último período com uma linha por obra, incluindo dados cadastrais, status, data da leitura e nomes das fotos de referência.</p>
+      <p class="muted">Gera uma planilha do último período com uma linha por obra, incluindo dados cadastrais, filial e local conferidos, status, data da leitura e nomes das fotos de referência.</p>
       <button id="exportCsvBtn" class="primary full">Exportar CSV do último período</button>
     </div>
 
     <div class="card">
+      <h3>Acervo completo em Excel</h3>
+      <p class="muted">Gera uma planilha (.xlsx) com todas as obras cadastradas — patrimônio, nome, artista, estilo, filial, localização, descrição — e até 2 fotos de cada obra dentro da própria planilha. Pode demorar um pouco dependendo da quantidade de obras.</p>
+      <button id="exportXlsxBtn" class="primary full">Exportar acervo em Excel</button>
+    </div>
+
+    <div class="card">
+      <h3>Base informativa (edição em massa)</h3>
+      <p class="muted">Exporte uma planilha só com os dados cadastrais (sem fotos) pra editar em massa — nome, artista, estilo, filial, localização, descrição. Depois importe de volta: a atualização usa o Patrimônio como referência e só altera esses campos, sem mexer nas fotos.</p>
+      <button id="exportBaseBtn" class="primary full">Exportar base informativa</button>
+      <button id="importBaseBtn" class="secondary full">Importar base atualizada</button>
+      <input id="importBaseFile" type="file" accept=".xlsx" hidden>
+      <div id="importBaseStatus" class="muted import-status"></div>
+    </div>
+
+    <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.5.5</b> — importação em lote + edição de obras + reconhecimento visual + recorte da obra.</p>
+      <p class="muted">Acervo Mobile <b>0.5.6</b> — filiais e locais, estilos, painéis, documentos anexos e edição em massa.</p>
     </div>
   </section>
 </main>
@@ -144,6 +172,7 @@
   <button class="nav active" data-view="acervo"><span>🖼️</span><b>Acervo</b></button>
   <button class="nav" data-view="conferir"><span>📷</span><b>Conferir</b></button>
   <button class="nav" data-view="resultados"><span>📋</span><b>Resultados</b></button>
+  <button class="nav" data-view="paineis"><span>📊</span><b>Painéis</b></button>
   <button class="nav" data-view="ajustes"><span>⚙️</span><b>Ajustes</b></button>
 </nav>
 
@@ -156,13 +185,28 @@
     <input type="hidden" name="editId" id="editId"><label>Patrimônio</label><input name="patrimonio" placeholder="Pode ficar vazio se a base original não possuir">
     <label>Nome da obra *</label><input name="nome" required>
     <label>Artista</label><input name="artista">
-    <label>Técnica</label>
-    <select name="tecnica"><option value="">Selecione</option></select>
-    <label>Localização</label><input name="localizacao">
+    <label>Estilo</label>
+    <select name="estilo"><option value="">Selecione</option></select>
+    <label>Filial</label>
+    <select name="filial"><option value="">Selecione</option></select>
+    <label>Localização</label>
+    <select name="localizacao"><option value="">Selecione</option></select>
     <label>Descrição</label><textarea name="descricao" rows="3"></textarea>
     <label>Fotos de referência</label><input id="referenceInput" type="file" accept="image/*" capture="environment" multiple>
     <div id="existingPhotosWrap" class="hidden"><label>Fotos atuais <small class="muted">(toque em ✂️ pra recortar)</small></label><div id="existingPhotos" class="preview-grid editable-photos"></div></div><div id="referencePreview" class="preview-grid"></div>
     <p class="muted">Recomendado: 2 ou 3 fotos da obra, com enquadramentos ligeiramente diferentes. Ao adicionar fotos novas, você poderá recortar cada uma pra marcar só a obra, sem fundo.</p>
+
+    <label>Documentos (nota fiscal, termo de doação, etc.)</label>
+    <div class="doc-add-row">
+      <select id="documentoTipoSelect">
+        <option value="compra">Compra</option>
+        <option value="doacao">Doação</option>
+      </select>
+      <input id="documentoInput" type="file">
+      <button type="button" id="addDocumentoBtn" class="secondary">Adicionar</button>
+    </div>
+    <div id="documentosList" class="doc-list"></div>
+
     <div class="actions sticky">
       <button type="button" id="deleteArtworkBtn" class="danger hidden">Excluir obra</button>
       <button type="button" class="secondary" data-close="artworkDialog">Cancelar</button>
@@ -199,16 +243,42 @@
   </div>
 </dialog>
 
-<dialog id="tecnicasDialog">
+<dialog id="estilosDialog">
   <div class="dialog-card">
     <div class="dialog-head">
-      <div><span class="pill">Ajustes</span><h2>Técnicas / estilos</h2></div>
-      <button type="button" class="x" data-close="tecnicasDialog">✕</button>
+      <div><span class="pill">Ajustes</span><h2>Estilos de obra</h2></div>
+      <button type="button" class="x" data-close="estilosDialog">✕</button>
     </div>
-    <div id="tecnicasList" class="tag-list"></div>
+    <div id="estilosList" class="tag-list"></div>
     <div class="add-row">
-      <input id="novaTecnicaInput" placeholder="Nova técnica ou estilo (ex.: Gravura)">
-      <button type="button" id="addTecnicaBtn" class="primary">+</button>
+      <input id="novoEstiloInput" placeholder="Novo estilo (ex.: Gravura)">
+      <button type="button" id="addEstiloBtn" class="primary">+</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="filiaisDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Ajustes</span><h2>Filiais e locais</h2></div>
+      <button type="button" class="x" data-close="filiaisDialog">✕</button>
+    </div>
+    <label>Filial selecionada</label>
+    <div class="filial-select-row">
+      <select id="filialManagerSelect"></select>
+      <button type="button" id="removeFilialBtn" class="danger" title="Excluir esta filial">🗑️</button>
+    </div>
+    <div class="add-row">
+      <input id="novaFilialCodigo" placeholder="Código (ex.: 159)">
+      <input id="novaFilialNome" placeholder="Nome da filial">
+      <button type="button" id="addFilialBtn" class="primary">+</button>
+    </div>
+    <hr class="dlg-sep">
+    <label>Locais desta filial</label>
+    <div id="locaisList" class="tag-list"></div>
+    <div class="add-row">
+      <input id="novoLocalInput" placeholder="Novo local (ex.: Hall principal)">
+      <button type="button" id="addLocalBtn" class="primary">+</button>
     </div>
   </div>
 </dialog>
@@ -246,6 +316,7 @@
 </dialog>
 
 <div id="toast" class="toast"></div>
+<script src="./vendor/exceljs.bare.min.js"></script>
 <script src="./app.js"></script>
 </body>
 </html>

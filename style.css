@@ -82,3 +82,42 @@ label{display:block;font-size:12px;font-weight:800;margin-top:12px;color:var(--n
 
 /* V0.5.5 — aviso de backup desatualizado */
 .backup-warn{color:#7a1f1f;background:#fdeceb;border:1px solid #f3b9b4;border-radius:10px;padding:8px 12px;font-weight:700;margin-top:6px}
+
+/* V0.5.6 — filiais/locais, painéis, documentos, divergência de local */
+.filial-select-row{display:flex;gap:8px;align-items:center}
+.filial-select-row select{flex:1}
+.dlg-sep{border:0;border-top:1px solid var(--line);margin:18px 0}
+
+.dash-total{background:linear-gradient(160deg,#fff 0%,#F9FBFF 64%,#FFF8D8 100%);border:1px solid var(--line);border-top:4px solid var(--gold);border-radius:17px;padding:16px;margin-bottom:14px;display:flex;flex-direction:column;align-items:center;text-align:center}
+.dash-total b{font-size:34px;color:var(--navy);line-height:1.1}
+.dash-total span{color:var(--muted);font-size:13px;margin-top:2px}
+.dash-grid{display:grid;gap:10px}
+.dash-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:15px;padding:14px 16px;text-align:left;display:flex;justify-content:space-between;align-items:center;font-weight:800;color:var(--navy)}
+.dash-card-local{cursor:default}
+.dash-card-local button{flex:none}
+.dash-count{color:var(--muted);font-weight:700;font-size:13px}
+.dash-back{border:0;background:none;color:var(--navy2);font-weight:800;padding:4px 0 12px;text-align:left}
+.dash-catalog{display:grid;gap:10px}
+.dash-item{display:flex;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px}
+.dash-item img{width:64px;height:64px;object-fit:cover;border-radius:12px;background:#E7EEF6;flex:none}
+.dash-item-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dash-item-info b{color:var(--navy);font-size:14px}
+.dash-item-info .meta{margin:0}
+
+.doc-add-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.doc-add-row select{flex:none;width:auto}
+.doc-add-row input[type=file]{flex:1;min-width:140px}
+.doc-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.doc-row{display:flex;align-items:center;gap:10px;background:#F7FAFD;border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+.doc-row a{flex:1;color:var(--navy2);font-weight:700;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-badge{font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;flex:none}
+.doc-compra{background:#E6F4EA;color:#1E7B34}
+.doc-doacao{background:#EAE6FB;color:#5B3FB8}
+.doc-row button{background:none;border:0;color:var(--muted);font-size:15px;cursor:pointer;flex:none}
+
+.diverg-box{background:#FFF6E5;border:1px solid #F2D8A0;border-radius:14px;padding:12px 14px;margin-top:10px}
+.diverg-box p{margin:0 0 10px;font-size:13px;line-height:1.5}
+.diverg-actions{display:flex;gap:8px;flex-wrap:wrap}
+.diverg-actions button{flex:1;min-width:110px;font-size:12.5px;padding:9px 8px}
+
+.temp-tag{display:inline-block;background:#FFF0CC;color:#8A5A00;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;margin-left:4px}
