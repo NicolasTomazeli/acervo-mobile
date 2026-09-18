@@ -50,15 +50,9 @@
       <p>Tire fotos ou escolha imagens da galeria. O processamento acontece no aparelho.</p>
     </div>
 
-    <div class="card">
-      <label>Filial que está sendo conferida</label>
-      <select id="confFilialSelect"><option value="">Selecione</option></select>
-      <label>Local</label>
-      <select id="confLocalSelect"><option value="">Selecione</option></select>
-      <p class="muted">Se uma obra identificada estiver cadastrada em outro local, você poderá atualizar o cadastro depois de ver o resultado.</p>
-    </div>
+    <div class="card" id="conferenceContextBanner"></div>
 
-    <div class="card">
+    <div class="card hidden" id="conferencePhotosCard">
       <input id="conferenceInput" type="file" accept="image/*" capture="environment" multiple>
       <div id="conferencePreview" class="preview-grid"></div>
       <div class="actions">
@@ -146,10 +140,11 @@
       <button id="exportCsvBtn" class="primary full">Exportar CSV do último período</button>
     </div>
 
-    <div class="card">
+    <div class="card" id="xlsxCard">
       <h3>Acervo completo em Excel</h3>
       <p class="muted">Gera uma planilha (.xlsx) com todas as obras cadastradas — patrimônio, nome, artista, estilo, filial, localização, descrição — e até 2 fotos de cada obra dentro da própria planilha. Pode demorar um pouco dependendo da quantidade de obras.</p>
       <button id="exportXlsxBtn" class="primary full">Exportar acervo em Excel</button>
+      <p id="xlsxMobileNotice" class="muted hidden">Essa exportação envolve centenas de imagens e fica pesada — por isso só fica disponível pelo computador. Abra o app num navegador de PC pra gerar.</p>
     </div>
 
     <div class="card">
@@ -279,6 +274,23 @@
     <div class="add-row">
       <input id="novoLocalInput" placeholder="Novo local (ex.: Hall principal)">
       <button type="button" id="addLocalBtn" class="primary">+</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="conferenceContextDialog">
+  <div class="dialog-card">
+    <div class="dialog-head">
+      <div><span class="pill">Conferência</span><h2>Onde você está conferindo?</h2></div>
+      <button type="button" class="x" data-close="conferenceContextDialog">✕</button>
+    </div>
+    <p class="muted">Essa filial e local ficam valendo pra todas as conferências que você rodar, até você encerrar.</p>
+    <label>Filial</label>
+    <select id="ctxFilialSelect"><option value="">Selecione</option></select>
+    <label>Local</label>
+    <select id="ctxLocalSelect"><option value="">Selecione</option></select>
+    <div class="actions sticky">
+      <button type="button" id="ctxConfirmBtn" class="primary grow">Indicar conferência</button>
     </div>
   </div>
 </dialog>

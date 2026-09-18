@@ -2,7 +2,7 @@
 const DB_NAME="acervo-mobile-db", DB_VERSION=3;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
 const DEFAULT_ESTILOS=["Pintura","Escultura","Cerâmica"];
-let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set(),cropStateData=null,editedFotos=[],editedDescs=[],editedDocumentos=[];
+let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set(),cropStateData=null,editedFotos=[],editedDescs=[],editedDocumentos=[],conferenciaAtivaFilial=null,conferenciaAtivaLocal=null;
 let dashboardStage="filiais",dashboardFilial=null,dashboardLocal=null;
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
@@ -13,14 +13,14 @@ async function openDB(){return new Promise((a,b)=>{const r=indexedDB.open(DB_NAM
 /* ---- Estilos (antes "técnicas") ---- */
 async function getEstilos(){const r=await requestP(store("config").get("estilos"));return (r&&Array.isArray(r.valores)&&r.valores.length)?r.valores:DEFAULT_ESTILOS.slice()}
 async function saveEstilos(arr){await requestP(store("config","readwrite").put({chave:"estilos",valores:arr}))}
-async function populateEstiloSelect(currentValue){const sel=artworkForm.elements.estilo,list=await getEstilos(),extra=(currentValue&&!list.includes(currentValue))?[currentValue]:[];sel.innerHTML=`<option value="">Selecione</option>`+[...list,...extra].map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");sel.value=currentValue||""}
+async function populateEstiloSelect(currentValue){const sel=artworkForm.elements.estilo,list=(await getEstilos()).slice().sort((a,b)=>a.localeCompare(b,"pt-BR")),extra=(currentValue&&!list.includes(currentValue))?[currentValue]:[];sel.innerHTML=`<option value="">Selecione</option>`+[...list,...extra].map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");sel.value=currentValue||""}
 
 /* ---- Filiais e locais ---- */
 async function getFiliais(){const r=await requestP(store("config").get("filiais"));return (r&&Array.isArray(r.valores))?r.valores:[]}
 async function saveFiliais(arr){await requestP(store("config","readwrite").put({chave:"filiais",valores:arr}))}
 function nomeFilial(filiais,codigo){const f=filiais.find(x=>x.codigo===codigo);return f?f.nome:(codigo||"-")}
-async function populateFilialSelect(sel,currentValue){const filiais=await getFiliais();sel.innerHTML=`<option value="">Selecione</option>`+filiais.map(fl=>`<option value="${esc(fl.codigo)}">${esc(fl.nome)}</option>`).join("");sel.value=currentValue||(filiais.length===1?filiais[0].codigo:"")}
-async function populateLocalSelect(sel,filialCodigo,currentValue){const filiais=await getFiliais(),fl=filiais.find(x=>x.codigo===filialCodigo),locais=fl?fl.locais:[],extra=(currentValue&&!locais.includes(currentValue))?[currentValue]:[];sel.innerHTML=`<option value="">Selecione</option>`+[...locais,...extra].map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join("");sel.value=currentValue||""}
+async function populateFilialSelect(sel,currentValue){const filiais=(await getFiliais()).slice().sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));sel.innerHTML=`<option value="">Selecione</option>`+filiais.map(fl=>`<option value="${esc(fl.codigo)}">${esc(fl.nome)}</option>`).join("");sel.value=currentValue||(filiais.length===1?filiais[0].codigo:"")}
+async function populateLocalSelect(sel,filialCodigo,currentValue){const filiais=await getFiliais(),fl=filiais.find(x=>x.codigo===filialCodigo),locais=(fl?fl.locais:[]).slice().sort((a,b)=>a.localeCompare(b,"pt-BR")),extra=(currentValue&&!locais.includes(currentValue))?[currentValue]:[];sel.innerHTML=`<option value="">Selecione</option>`+[...locais,...extra].map(l=>`<option value="${esc(l)}">${esc(l)}</option>`).join("");sel.value=currentValue||""}
 
 /* ---- Migração única: cria filial 159 com os locais já usados, migra técnica -> estilo ---- */
 async function migrarFilialEstilo(){
@@ -58,7 +58,7 @@ const esc=v=>String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 const url=b=>b?URL.createObjectURL(b):"";
 const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
 
-function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{const v=b.dataset.view;document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");if(v==="resultados")renderHistory();if(v==="paineis"){dashboardStage="filiais";dashboardFilial=null;dashboardLocal=null;renderDashboard()}window.scrollTo({top:0,behavior:"smooth"})})}
+function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{const v=b.dataset.view;document.querySelectorAll(".nav").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.remove("active"));document.getElementById("view-"+v).classList.add("active");if(v==="resultados")renderHistory();if(v==="conferir"){renderConferenceBanner();if(!conferenciaAtivaFilial||!conferenciaAtivaLocal)openConferenceContextDialog()}if(v==="paineis"){dashboardStage="filiais";dashboardFilial=null;dashboardLocal=null;renderDashboard()}window.scrollTo({top:0,behavior:"smooth"})})}
 
 function resetArtworkForm(){
  editingArtworkId=null;removedPhotoIndexes=new Set();referenceFiles=[];editedFotos=[];editedDescs=[];editedDocumentos=[];artworkForm.reset();editId.value="";
@@ -109,20 +109,45 @@ function openCropTool(blob,label){
 async function cropQueue(blobs,labelPrefix){const out=[];for(let i=0;i<blobs.length;i++)out.push(await openCropTool(blobs[i],blobs.length>1?`${labelPrefix} — foto ${i+1} de ${blobs.length}`:labelPrefix));return out}
 
 /* ---- Entradas de arquivos ---- */
-function updateConferenceReadyState(){runConferenceBtn.disabled=!(conferenceFiles.length&&confFilialSelect.value&&confLocalSelect.value)}
+function updateConferenceReadyState(){runConferenceBtn.disabled=!(conferenceFiles.length&&conferenciaAtivaFilial&&conferenciaAtivaLocal)}
 function setupInputs(){
  referenceInput.onchange=async()=>{const raw=[];for(const f of [...referenceInput.files].slice(0,8))if(f.type.startsWith("image/"))raw.push(await compress(f));referenceFiles=raw.length?await cropQueue(raw,"Foto de referência"):[];preview(referenceFiles,"referencePreview")};
  conferenceInput.onchange=async()=>{const raw=[];for(const f of [...conferenceInput.files].slice(0,7))if(f.type.startsWith("image/"))raw.push(await compress(f));conferenceFiles=raw.length?await cropQueue(raw,"Foto da conferência"):[];preview(conferenceFiles,"conferencePreview");updateConferenceReadyState();clearConferenceBtn.classList.toggle("hidden",!conferenceFiles.length)};
  clearConferenceBtn.onclick=clearConference;runConferenceBtn.onclick=runConference;
 }
 function clearConference(){conferenceFiles=[];conferenceInput.value="";conferencePreview.innerHTML="";updateConferenceReadyState();clearConferenceBtn.classList.add("hidden")}
-async function setupConferenceContext(){
+
+/* ---- Conferência ativa: filial/local ficam valendo até "Encerrar conferência" ---- */
+async function loadConferenciaAtiva(){const r=await requestP(store("config").get("conferenciaAtiva"));conferenciaAtivaFilial=r?.filial||null;conferenciaAtivaLocal=r?.localizacao||null}
+async function setConferenciaAtiva(filial,localizacao){conferenciaAtivaFilial=filial;conferenciaAtivaLocal=localizacao;await requestP(store("config","readwrite").put({chave:"conferenciaAtiva",filial,localizacao}));await requestP(store("config","readwrite").put({chave:"ultimoContextoConferencia",filial,localizacao}))}
+async function encerrarConferenciaAtiva(){conferenciaAtivaFilial=null;conferenciaAtivaLocal=null;await requestP(store("config","readwrite").delete("conferenciaAtiva"));clearConference();renderConferenceBanner()}
+async function openConferenceContextDialog(){
  const last=await requestP(store("config").get("ultimoContextoConferencia"));
- await populateFilialSelect(confFilialSelect,last?.filial||"");
- await populateLocalSelect(confLocalSelect,confFilialSelect.value,last?.localizacao||"");
- confFilialSelect.onchange=()=>{populateLocalSelect(confLocalSelect,confFilialSelect.value,"");updateConferenceReadyState()};
- confLocalSelect.onchange=updateConferenceReadyState;
+ await populateFilialSelect(ctxFilialSelect,conferenciaAtivaFilial||last?.filial||"");
+ await populateLocalSelect(ctxLocalSelect,ctxFilialSelect.value,conferenciaAtivaLocal||last?.localizacao||"");
+ ctxFilialSelect.onchange=()=>populateLocalSelect(ctxLocalSelect,ctxFilialSelect.value,"");
+ conferenceContextDialog.showModal();
+}
+async function renderConferenceBanner(){
+ const banner=document.getElementById("conferenceContextBanner"),photosCard=document.getElementById("conferencePhotosCard");
+ if(conferenciaAtivaFilial&&conferenciaAtivaLocal){
+  const filiais=await getFiliais();
+  banner.innerHTML=`<div class="ctx-active"><div><span class="pill">Conferindo</span><b>${esc(nomeFilial(filiais,conferenciaAtivaFilial))} · ${esc(conferenciaAtivaLocal)}</b></div><button type="button" id="endConferenceBtn" class="danger">Encerrar conferência</button></div>`;
+  document.getElementById("endConferenceBtn").onclick=()=>{if(confirm("Encerrar a conferência ativa neste local?"))encerrarConferenciaAtiva()};
+  photosCard.classList.remove("hidden");
+ }else{
+  banner.innerHTML=`<div class="ctx-empty"><p class="muted">Nenhuma conferência ativa.</p><button type="button" id="startConferenceBtn" class="primary full">Indicar conferência</button></div>`;
+  document.getElementById("startConferenceBtn").onclick=openConferenceContextDialog;
+  photosCard.classList.add("hidden");
+ }
  updateConferenceReadyState();
+}
+function setupConferenceContext(){
+ ctxConfirmBtn.onclick=async()=>{
+  if(!ctxFilialSelect.value||!ctxLocalSelect.value)return toast("Selecione a filial e o local.");
+  await setConferenciaAtiva(ctxFilialSelect.value,ctxLocalSelect.value);
+  conferenceContextDialog.close();await renderConferenceBanner();
+ };
 }
 
 /* ---- Documentos anexados à obra ---- */
@@ -199,9 +224,9 @@ function efetivoLocal(o){
 }
 
 async function runConference(){
- if(!confFilialSelect.value||!confLocalSelect.value)return toast("Selecione a filial e o local que você está conferindo.");
+ if(!conferenciaAtivaFilial||!conferenciaAtivaLocal)return toast("Indique a filial e o local antes de conferir.");
  const ws=await all("obras"),refs=ws.filter(o=>(o.fotos?.length||0)>0);if(!refs.length)return toast("Cadastre ao menos uma obra com foto.");
- const filialConferida=confFilialSelect.value,localConferido=confLocalSelect.value;
+ const filialConferida=conferenciaAtivaFilial,localConferido=conferenciaAtivaLocal;
  runConferenceBtn.disabled=true;runConferenceBtn.textContent="Analisando…";await ensureDescriptors(refs);
  const refsMap=new Map(refs.map(o=>[o.id,o]));
  const items=[];
@@ -218,7 +243,6 @@ async function runConference(){
  }
  prog(conferenceFiles.length,conferenceFiles.length,"Concluído.");
  const id=await requestP(store("conferencias","readwrite").add({criadoEm:new Date().toISOString(),filialConferida,localConferido,items}));
- await requestP(store("config","readwrite").put({chave:"ultimoContextoConferencia",filial:filialConferida,localizacao:localConferido}));
  clearConference();runConferenceBtn.textContent="Iniciar conferência";progressWrap.classList.add("hidden");renderHistory();openResult(id);
 }
 
@@ -288,14 +312,16 @@ async function exportCsv(confId=null){
  const blob=new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-conferencia-${c.id}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");
 }
 
-async function imgToEmbed(blob,maxSize=220){
+async function imgToEmbed(blob,maxSize=400,quality=.85){
  const bmp=await createImageBitmap(blob);
  const k=Math.min(1,maxSize/Math.max(bmp.width,bmp.height)),w=Math.max(1,Math.round(bmp.width*k)),h=Math.max(1,Math.round(bmp.height*k));
  const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(bmp,0,0,w,h);bmp.close?.();
- const outBlob=await new Promise(r=>c.toBlob(x=>r(x),"image/jpeg",.75));
+ const outBlob=await new Promise(r=>c.toBlob(x=>r(x),"image/jpeg",quality));
  return {buffer:await outBlob.arrayBuffer(),width:w,height:h};
 }
+function fitBox(w,h,max){const k=Math.min(1,max/Math.max(w,h));return {width:Math.max(1,Math.round(w*k)),height:Math.max(1,Math.round(h*k))}}
 async function exportAcervoXlsx(){
+ if(!isDesktopLike())return toast("Essa exportação só está disponível pelo computador.");
  if(typeof ExcelJS==="undefined")return toast("Não foi possível carregar o gerador de Excel.");
  const filiais=await getFiliais();
  const works=(await all("obras")).sort((a,b)=>String(a.patrimonio).localeCompare(String(b.patrimonio)));
@@ -312,11 +338,11 @@ async function exportAcervoXlsx(){
    {header:"Filial",key:"filial",width:16},
    {header:"Localização",key:"localizacao",width:20},
    {header:"Descrição",key:"descricao",width:32},
-   {header:"Foto 1",key:"foto1",width:20},
-   {header:"Foto 2",key:"foto2",width:20},
+   {header:"Foto 1",key:"foto1",width:24},
+   {header:"Foto 2",key:"foto2",width:24},
   ];
   ws.getRow(1).font={bold:true};
-  const ROWPX=130,MAXIMG=120;
+  const ROWPX=170,EMBEDSIZE=400,DISPLAYSIZE=155;
   for(let i=0;i<works.length;i++){
    const o=works[i],rowNumber=i+2;
    exportXlsxBtn.textContent=`Gerando… ${i+1}/${works.length}`;
@@ -325,9 +351,9 @@ async function exportAcervoXlsx(){
    for(let f=0;f<2;f++){
     const foto=o.fotos?.[f];if(!foto)continue;
     try{
-     const {buffer,width,height}=await imgToEmbed(foto,MAXIMG);
+     const {buffer,width,height}=await imgToEmbed(foto,EMBEDSIZE,.85);
      const imgId=wb.addImage({buffer,extension:"jpeg"});
-     ws.addImage(imgId,{tl:{col:7+f,row:rowNumber-1},ext:{width,height}});
+     ws.addImage(imgId,{tl:{col:7+f,row:rowNumber-1},ext:fitBox(width,height,DISPLAYSIZE)});
     }catch{}
    }
   }
@@ -467,13 +493,13 @@ async function importBackup(f){
 
 /* ---- Gerenciar Estilos ---- */
 async function renderEstilosDialog(){
- const list=await getEstilos();
+ const list=(await getEstilos()).slice().sort((a,b)=>a.localeCompare(b,"pt-BR"));
  estilosList.innerHTML=list.length?"":`<p class="muted">Nenhum estilo cadastrado ainda.</p>`;
- list.forEach((t,i)=>{
+ list.forEach(t=>{
   const chip=document.createElement("div");chip.className="tag-chip";
   const span=document.createElement("span");span.textContent=t;
   const rm=document.createElement("button");rm.type="button";rm.textContent="✕";rm.title="Remover";
-  rm.onclick=async()=>{const cur=await getEstilos();cur.splice(i,1);await saveEstilos(cur);renderEstilosDialog()};
+  rm.onclick=async()=>{const cur=await getEstilos();const i=cur.indexOf(t);if(i>-1)cur.splice(i,1);await saveEstilos(cur);renderEstilosDialog()};
   chip.append(span,rm);estilosList.append(chip);
  });
 }
@@ -492,7 +518,7 @@ function setupEstilos(){
 /* ---- Gerenciar Filiais e locais ---- */
 let filialManagerAtual=null;
 async function renderFiliaisManagerSelect(){
- const filiais=await getFiliais();
+ const filiais=(await getFiliais()).slice().sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR"));
  filialManagerSelect.innerHTML=filiais.map(fl=>`<option value="${esc(fl.codigo)}">${esc(fl.nome)} (${esc(fl.codigo)})</option>`).join("");
  if(!filiais.some(fl=>fl.codigo===filialManagerAtual))filialManagerAtual=filiais[0]?.codigo||null;
  if(filialManagerAtual)filialManagerSelect.value=filialManagerAtual;
@@ -502,12 +528,13 @@ async function renderLocaisList(){
  const filiais=await getFiliais(),fl=filiais.find(x=>x.codigo===filialManagerAtual);
  locaisList.innerHTML="";
  if(!fl){locaisList.innerHTML=`<p class="muted">Cadastre uma filial primeiro.</p>`;return}
- if(!fl.locais.length)locaisList.innerHTML=`<p class="muted">Nenhum local cadastrado nesta filial.</p>`;
- fl.locais.forEach((l,i)=>{
+ const locaisOrdenados=fl.locais.slice().sort((a,b)=>a.localeCompare(b,"pt-BR"));
+ if(!locaisOrdenados.length)locaisList.innerHTML=`<p class="muted">Nenhum local cadastrado nesta filial.</p>`;
+ locaisOrdenados.forEach(l=>{
   const chip=document.createElement("div");chip.className="tag-chip";
   const span=document.createElement("span");span.textContent=l;
   const rm=document.createElement("button");rm.type="button";rm.textContent="✕";rm.title="Remover";
-  rm.onclick=async()=>{const filiais2=await getFiliais();const fl2=filiais2.find(x=>x.codigo===filialManagerAtual);fl2.locais.splice(i,1);await saveFiliais(filiais2);renderLocaisList()};
+  rm.onclick=async()=>{const filiais2=await getFiliais();const fl2=filiais2.find(x=>x.codigo===filialManagerAtual);const i=fl2.locais.indexOf(l);if(i>-1)fl2.locais.splice(i,1);await saveFiliais(filiais2);renderLocaisList()};
   chip.append(span,rm);locaisList.append(chip);
  });
 }
@@ -545,6 +572,7 @@ function setupFiliais(){
 
 /* ---- Painéis (dashboards) ---- */
 async function renderDashboard(){
+ window.scrollTo(0,0);
  const obras=await all("obras"),filiais=await getFiliais();
  if(dashboardStage==="filiais"){
   const porFilial=new Map();
@@ -552,7 +580,7 @@ async function renderDashboard(){
   dashboardRoot.innerHTML=`<div class="dash-total"><b>${obras.length}</b><span>obras cadastradas no total</span></div><div class="dash-grid" id="dashFiliaisGrid"></div>`;
   const grid=document.getElementById("dashFiliaisGrid");
   if(!filiais.length){grid.innerHTML=`<p class="muted">Nenhuma filial cadastrada ainda. Cadastre em Ajustes → Filiais e locais.</p>`}
-  filiais.forEach(fl=>{
+  filiais.slice().sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR")).forEach(fl=>{
    const card=document.createElement("button");card.type="button";card.className="dash-card";
    card.innerHTML=`<b>${esc(fl.nome)}</b><span class="dash-count">${porFilial.get(fl.codigo)||0} obra(s)</span>`;
    card.onclick=()=>{dashboardStage="locais";dashboardFilial=fl.codigo;renderDashboard()};
@@ -566,7 +594,7 @@ async function renderDashboard(){
   dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn">← Filiais</button><div class="dash-total"><b>${totalFilial}</b><span>obra(s) em ${esc(fl?.nome||dashboardFilial)}</span></div><div class="dash-grid" id="dashLocaisGrid"></div>`;
   document.getElementById("dashBackBtn").onclick=()=>{dashboardStage="filiais";renderDashboard()};
   const grid=document.getElementById("dashLocaisGrid");
-  const locais=[...porLocal.keys()].sort((a,b)=>(porLocal.get(b)||0)-(porLocal.get(a)||0));
+  const locais=[...porLocal.keys()].sort((a,b)=>(a||"").localeCompare(b||"","pt-BR"));
   if(!locais.length)grid.innerHTML=`<p class="muted">Nenhuma obra registrada nesta filial ainda.</p>`;
   locais.forEach(loc=>{
    const card=document.createElement("div");card.className="dash-card dash-card-local";
@@ -590,13 +618,15 @@ async function renderDashboard(){
  }
 }
 
-function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();exportXlsxBtn.onclick=exportAcervoXlsx;resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks}
+function isDesktopLike(){const uaMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);return !uaMobile&&window.innerWidth>=820}
+function applyXlsxVisibility(){const ok=isDesktopLike();exportXlsxBtn.classList.toggle("hidden",!ok);xlsxMobileNotice.classList.toggle("hidden",ok)}
+function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();exportXlsxBtn.onclick=exportAcervoXlsx;resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks;applyXlsxVisibility();window.addEventListener("resize",applyXlsxVisibility)}
 
 (async()=>{
  db=await openDB();
  const migrou=await migrarFilialEstilo();
- setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCropTool();setupEstilos();setupFiliais();setupDocumentos();setupBaseInformativa();
- await setupConferenceContext();
+ setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCropTool();setupEstilos();setupFiliais();setupDocumentos();setupBaseInformativa();setupConferenceContext();
+ await loadConferenciaAtiva();
  renderArtworks();renderHistory();
  ensureStoragePersisted().then(renderStorageStatus);
  if(migrou)toast("Acervo atualizado: filial e estilo preenchidos automaticamente.");
