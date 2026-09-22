@@ -224,3 +224,15 @@ Os três campos editáveis (Valor Contábil, Valor da Última Avaliação, Regis
 também entraram na Base informativa (exportar/editar em massa/reimportar), no CSV por
 conferência e no Excel completo com fotos — pra ficar tudo consistente entre os
 relatórios que já existiam.
+
+---
+
+STATUS DE SEGURANÇA NO CATÁLOGO + PAINEL INFORMATIVO
+
+O selo de status de segurança agora também aparece no catálogo dos Painéis (Painéis →
+filial → local → Abrir catálogo), do lado do nome de cada obra, igual já aparecia no
+Acervo.
+
+E agora, dentro desse catálogo, tocar em qualquer obra (imagem ou linha inteira) abre
+um painel com: foto, nome, patrimônio, autor, se está registrada, Valor Contábil,
+Valor da Última Avaliação e o Status de segurança.

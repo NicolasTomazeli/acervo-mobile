@@ -673,19 +673,40 @@ async function renderDashboard(){
    grid.append(card);
   });
  } else if(dashboardStage==="catalogo"){
-  const fl=filiais.find(x=>x.codigo===dashboardFilial);
+  const fl=filiais.find(x=>x.codigo===dashboardFilial),criterios=await getCriteriosStatus();
   const lista=obras.filter(o=>{const ef=efetivoLocal(o);return ef.filial===dashboardFilial&&ef.localizacao===dashboardLocal}).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
   dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn2">← ${esc(fl?.nome||dashboardFilial)}</button><div class="dash-total"><b>${lista.length}</b><span>obra(s) em ${esc(dashboardLocal||"-")}</span></div><div class="dash-catalog" id="dashCatalogList"></div>`;
   document.getElementById("dashBackBtn2").onclick=()=>{dashboardStage="locais";renderDashboard()};
   const listEl=document.getElementById("dashCatalogList");
   lista.forEach(o=>{
-   const row=document.createElement("div");row.className="dash-item";
+   const row=document.createElement("div");row.className="dash-item";row.tabIndex=0;
    const im=new Image();if(o.fotos?.[0])im.src=url(o.fotos[0]);
+   const nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);
    const info=document.createElement("div");info.className="dash-item-info";
-   info.innerHTML=`<b>${esc(o.nome||"Sem título")}</b><span class="meta">${esc(o.patrimonio||"Sem patrimônio")}</span><span class="meta">${esc(o.artista||"-")}</span>`;
-   row.append(im,info);listEl.append(row);
+   info.innerHTML=`<b>${esc(o.nome||"Sem título")}</b>${statusBadgeHtml(nivel)}<span class="meta">${esc(o.patrimonio||"Sem patrimônio")}</span><span class="meta">${esc(o.artista||"-")}</span>`;
+   row.append(im,info);row.onclick=()=>openObraInfo(o.id);listEl.append(row);
   });
  }
+}
+
+async function openObraInfo(id){
+ const o=await requestP(store("obras").get(id));if(!o)return;
+ const criterios=await getCriteriosStatus(),nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);
+ const brl=v=>v==null?"—":Number(v).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+ obraInfoImg.src=o.fotos?.[0]?url(o.fotos[0]):"";
+ obraInfoImg.classList.toggle("hidden",!o.fotos?.[0]);
+ obraInfoBody.innerHTML=`
+  <h2>${esc(o.nome||"Sem título")}</h2>
+  <p class="muted">${esc(o.patrimonio||"Sem patrimônio")}</p>
+  <div class="obra-info-grid">
+   <div><span class="obra-info-label">Autor</span><b>${esc(o.artista||"-")}</b></div>
+   <div><span class="obra-info-label">Registrado</span><b>${esc(o.registrado||"-")}</b></div>
+   <div><span class="obra-info-label">Valor Contábil</span><b>${brl(o.valorContabil)}</b></div>
+   <div><span class="obra-info-label">Valor da Última Avaliação</span><b>${brl(o.valorUltimaAvaliacao)}</b></div>
+  </div>
+  <div class="obra-info-status"><span class="obra-info-label">Status de segurança</span>${nivel?statusBadgeHtml(nivel):`<span class="muted">Sem avaliação registrada</span>`}</div>
+ `;
+ obraInfoDialog.showModal();
 }
 
 function isDesktopLike(){const uaMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);return !uaMobile&&window.innerWidth>=820}
