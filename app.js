@@ -2,6 +2,36 @@
 const DB_NAME="acervo-mobile-db", DB_VERSION=3;
 const AUTO_THRESHOLD=.82, REVIEW_THRESHOLD=.62, MIN_MARGIN=.035;
 const DEFAULT_ESTILOS=["Pintura","Escultura","Cerâmica"];
+const DEFAULT_CRITERIOS_STATUS={nivel1Max:50000,nivel2Max:200000};
+
+/* ---- Status de segurança: sempre calculado ao vivo a partir do Valor da Última Avaliação + critérios atuais (nunca gravado na obra, assim mudar os critérios já reflete em tudo na hora) ---- */
+async function getCriteriosStatus(){const r=await requestP(store("config").get("criteriosStatusSeguranca"));return r?{nivel1Max:r.nivel1Max,nivel2Max:r.nivel2Max}:{...DEFAULT_CRITERIOS_STATUS}}
+async function saveCriteriosStatus(nivel1Max,nivel2Max){await requestP(store("config","readwrite").put({chave:"criteriosStatusSeguranca",nivel1Max,nivel2Max}))}
+function calcularStatusSeguranca(valor,criterios){
+ if(valor===null||valor===undefined||valor==="")return null;
+ const v=Number(valor);if(isNaN(v))return null;
+ if(v<=criterios.nivel1Max)return 1;
+ if(v<=criterios.nivel2Max)return 2;
+ return 3;
+}
+function statusBadgeHtml(nivel){
+ if(!nivel)return"";
+ const label=nivel===1?"Nível 1 — Seguro":nivel===2?"Nível 2":"Nível 3 — Crítico";
+ return `<span class="status-badge status-${nivel}">${label}</span>`;
+}
+async function updateStatusBadgePreview(){
+ const criterios=await getCriteriosStatus(),nivel=calcularStatusSeguranca(valorAvaliacaoInput.value,criterios);
+ statusSegurancaBadgeWrap.innerHTML=nivel?`Status de segurança: ${statusBadgeHtml(nivel)}`:"";
+}
+function setupCriterios(){
+ manageCriteriosBtn.onclick=async()=>{const c=await getCriteriosStatus();criterioNivel1Input.value=c.nivel1Max;criterioNivel2Input.value=c.nivel2Max;criteriosDialog.showModal()};
+ salvarCriteriosBtn.onclick=async()=>{
+  const n1=Number(criterioNivel1Input.value),n2=Number(criterioNivel2Input.value);
+  if(criterioNivel1Input.value===""||criterioNivel2Input.value===""||isNaN(n1)||isNaN(n2)||n1<0||n2<0)return toast("Preencha os dois valores.");
+  if(n1>=n2)return toast("O valor do Nível 1 precisa ser menor que o do Nível 2.");
+  await saveCriteriosStatus(n1,n2);criteriosDialog.close();await renderArtworks();await updateStatusBadgePreview();toast("Critérios salvos.");
+ };
+}
 let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set(),cropStateData=null,editedFotos=[],editedDescs=[],editedDocumentos=[],conferenciaAtivaFilial=null,conferenciaAtivaLocal=null;
 let dashboardStage="filiais",dashboardFilial=null,dashboardLocal=null;
 
@@ -63,11 +93,12 @@ function setupNav(){document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>{
 function resetArtworkForm(){
  editingArtworkId=null;removedPhotoIndexes=new Set();referenceFiles=[];editedFotos=[];editedDescs=[];editedDocumentos=[];artworkForm.reset();editId.value="";
  artworkDialogTitle.textContent="Nova obra";existingPhotosWrap.classList.add("hidden");existingPhotos.innerHTML="";
- referencePreview.innerHTML="";deleteArtworkBtn.classList.add("hidden");renderDocumentosList();
+ referencePreview.innerHTML="";deleteArtworkBtn.classList.add("hidden");renderDocumentosList();statusSegurancaBadgeWrap.innerHTML="";
 }
 function setupDialogs(){
  newArtworkBtn.onclick=async()=>{resetArtworkForm();await populateEstiloSelect();await populateFilialSelect(artworkForm.elements.filial);await populateLocalSelect(artworkForm.elements.localizacao,artworkForm.elements.filial.value,"");artworkDialog.showModal()};
  artworkForm.elements.filial.onchange=()=>populateLocalSelect(artworkForm.elements.localizacao,artworkForm.elements.filial.value,"");
+ valorAvaliacaoInput.oninput=updateStatusBadgePreview;
  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
  deleteArtworkBtn.onclick=()=>editingArtworkId&&deleteArtwork(editingArtworkId);
 }
@@ -174,12 +205,13 @@ async function renderArtworks(){
  statArtworks.textContent=a.length;statRefs.textContent=a.reduce((s,o)=>s+(o.fotos?.length||0),0);
  if(q)a=a.filter(o=>[o.nome,o.patrimonio,o.artista,o.estilo,o.localizacao].join(" ").toLowerCase().includes(q));
  artworkList.innerHTML="";emptyArtworks.classList.toggle("hidden",a.length>0);
- const filiais=await getFiliais();
+ const filiais=await getFiliais(),criterios=await getCriteriosStatus();
  a.forEach(o=>{
    const c=document.createElement("div");c.className="art-card";const im=new Image;if(o.fotos?.[0])im.src=url(o.fotos[0]);
    const m=document.createElement("div");m.className="art-main";
    const ef=efetivoLocal(o),tempTag=ef.temporaria?` <span class="temp-tag">temporário até ${new Date(ef.ate).toLocaleDateString("pt-BR")}</span>`:"";
-   m.innerHTML=`<b>${esc(o.nome||"Sem título")}</b><div class=meta>${esc(o.patrimonio||"Sem patrimônio")} · ${esc(o.artista||"-")}${o.estilo?" · "+esc(o.estilo):""}</div><div class=meta>${esc(nomeFilial(filiais,ef.filial))} · ${esc(ef.localizacao||"-")}${tempTag} · ${o.fotos?.length||0} foto(s)</div>`;
+   const nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);
+   m.innerHTML=`<b>${esc(o.nome||"Sem título")}</b>${statusBadgeHtml(nivel)}<div class=meta>${esc(o.patrimonio||"Sem patrimônio")} · ${esc(o.artista||"-")}${o.estilo?" · "+esc(o.estilo):""}</div><div class=meta>${esc(nomeFilial(filiais,ef.filial))} · ${esc(ef.localizacao||"-")}${tempTag} · ${o.fotos?.length||0} foto(s)</div>`;
    const ac=document.createElement("div");ac.className="art-actions";const e=document.createElement("button");e.className="edit-art";e.textContent="Editar";e.onclick=()=>openEditArtwork(o.id);ac.append(e);c.append(im,m,ac);artworkList.append(c);
  });
 }
@@ -191,6 +223,10 @@ async function openEditArtwork(id){
  await populateFilialSelect(artworkForm.elements.filial,o.filial||"");
  await populateLocalSelect(artworkForm.elements.localizacao,artworkForm.elements.filial.value,o.localizacao||"");
  artworkForm.elements.descricao.value=o.descricao||"";
+ artworkForm.elements.valorContabil.value=o.valorContabil??"";
+ artworkForm.elements.valorUltimaAvaliacao.value=o.valorUltimaAvaliacao??"";
+ artworkForm.elements.registrado.value=o.registrado||"";
+ await updateStatusBadgePreview();
  existingPhotos.innerHTML="";removedPhotoIndexes=new Set();editedFotos=[...(o.fotos||[])];editedDescs=[...(o.descriptors||[])];editedDocumentos=[...(o.documentos||[])];renderDocumentosList();
  if(o.fotos?.length){existingPhotosWrap.classList.remove("hidden");o.fotos.forEach((f,i)=>{const d=document.createElement("div");d.className="preview";const im=new Image;im.src=url(f);const b=document.createElement("button");b.type="button";b.className="remove-photo";b.textContent="×";b.onclick=()=>{removedPhotoIndexes.add(i);d.remove();if(existingPhotos.children.length===0)existingPhotosWrap.classList.add("hidden")};const rc=document.createElement("button");rc.type="button";rc.className="recrop-photo";rc.title="Recortar";rc.textContent="✂️";rc.onclick=async()=>{const newBlob=await openCropTool(editedFotos[i],"Recortar foto cadastrada");editedFotos[i]=newBlob;editedDescs[i]=await extractSet(newBlob);im.src=url(newBlob);toast("Foto recortada — salve para confirmar.")};d.append(im,b,rc);existingPhotos.append(d)})}
  artworkDialog.showModal();
@@ -208,7 +244,7 @@ artworkForm.onsubmit=async e=>{
  const keptFotos=baseFotos.filter((_,i)=>!removedPhotoIndexes.has(i)),keptDesc=baseDescs.filter((_,i)=>!removedPhotoIndexes.has(i));
  const newDesc=[];if(referenceFiles.length)toast("Analisando novas referências…");for(const x of referenceFiles)newDesc.push(await extractSet(x));
  const wasEditing=!!editingArtworkId;
- const obj={...(editingArtworkId?old:{}),patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),estilo:(f.get("estilo")||"").trim(),filial:(f.get("filial")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),fotos:[...keptFotos,...referenceFiles],descriptors:[...keptDesc,...newDesc],documentos:editedDocumentos,atualizadoEm:new Date().toISOString()};
+ const obj={...(editingArtworkId?old:{}),patrimonio:p,nome:n,artista:(f.get("artista")||"").trim(),estilo:(f.get("estilo")||"").trim(),filial:(f.get("filial")||"").trim(),localizacao:(f.get("localizacao")||"").trim(),descricao:(f.get("descricao")||"").trim(),valorContabil:f.get("valorContabil")!==""?Number(f.get("valorContabil")):null,valorUltimaAvaliacao:f.get("valorUltimaAvaliacao")!==""?Number(f.get("valorUltimaAvaliacao")):null,registrado:(f.get("registrado")||"").trim(),fotos:[...keptFotos,...referenceFiles],descriptors:[...keptDesc,...newDesc],documentos:editedDocumentos,atualizadoEm:new Date().toISOString()};
  if(editingArtworkId){obj.id=editingArtworkId;await requestP(store("obras","readwrite").put(obj))}else{obj.criadoEm=new Date().toISOString();await requestP(store("obras","readwrite").add(obj))}
  artworkDialog.close();resetArtworkForm();await renderArtworks();toast(wasEditing?"Obra atualizada.":"Obra salva.");
 };
@@ -302,13 +338,13 @@ async function openResult(id){
    CSV não incorpora binários de imagem. O backup JSON mantém as imagens. */
 function csvCell(v){const s=String(v??"").replaceAll('"','""');return `"${s}"`}
 async function exportCsv(confId=null){
- const filiais=await getFiliais();
+ const filiais=await getFiliais(),criterios=await getCriteriosStatus();
  const works=(await all("obras")).sort((a,b)=>String(a.patrimonio).localeCompare(String(b.patrimonio))),confs=(await all("conferencias")).sort((a,b)=>b.id-a.id),c=confId?confs.find(x=>x.id===confId):confs[0];
  if(!c)return toast("Nenhuma conferência para exportar.");
  const foundBy=new Map();c.items.forEach((it,idx)=>{if(it.obraId){const prev=foundBy.get(it.obraId);if(!prev||((it.score||0)>(prev.score||0)))foundBy.set(it.obraId,{...it,leitura:idx+1})}});
- const header=["Conferencia","Data da conferencia","Filial conferida","Local conferido","Patrimonio","Nome da obra","Artista","Estilo","Filial","Localizacao","Descricao","Qtd fotos referencia","Fotos referencia","Encontrada no periodo","Leitura","Similaridade"];
+ const header=["Conferencia","Data da conferencia","Filial conferida","Local conferido","Patrimonio","Nome da obra","Artista","Estilo","Filial","Localizacao","Descricao","Valor Contabil","Valor Ultima Avaliacao","Registrado","Status de Seguranca","Qtd fotos referencia","Fotos referencia","Encontrada no periodo","Leitura","Similaridade"];
  const rows=[header.map(csvCell).join(";")];
- for(const o of works){const f=foundBy.get(o.id),fotoTxt=(o.fotos||[]).map((_,i)=>`Foto ${i+1}`).join(" | ");rows.push([c.id,new Date(c.criadoEm).toLocaleString("pt-BR"),nomeFilial(filiais,c.filialConferida),c.localConferido||"",o.patrimonio,o.nome,o.artista||"",o.estilo||"",nomeFilial(filiais,o.filial),o.localizacao||"",o.descricao||"",o.fotos?.length||0,fotoTxt,f?"SIM":"NÃO",f?.leitura||"",f?.score!=null?(f.score*100).toFixed(1)+"%":""].map(csvCell).join(";"))}
+ for(const o of works){const f=foundBy.get(o.id),fotoTxt=(o.fotos||[]).map((_,i)=>`Foto ${i+1}`).join(" | "),nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);rows.push([c.id,new Date(c.criadoEm).toLocaleString("pt-BR"),nomeFilial(filiais,c.filialConferida),c.localConferido||"",o.patrimonio,o.nome,o.artista||"",o.estilo||"",nomeFilial(filiais,o.filial),o.localizacao||"",o.descricao||"",o.valorContabil??"",o.valorUltimaAvaliacao??"",o.registrado||"",nivel?`Nível ${nivel}`:"",o.fotos?.length||0,fotoTxt,f?"SIM":"NÃO",f?.leitura||"",f?.score!=null?(f.score*100).toFixed(1)+"%":""].map(csvCell).join(";"))}
  const blob=new Blob(["\ufeff"+rows.join("\r\n")],{type:"text/csv;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`acervo-conferencia-${c.id}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");
 }
 
@@ -323,7 +359,7 @@ function fitBox(w,h,max){const k=Math.min(1,max/Math.max(w,h));return {width:Mat
 async function exportAcervoXlsx(){
  if(!isDesktopLike())return toast("Essa exportação só está disponível pelo computador.");
  if(typeof ExcelJS==="undefined")return toast("Não foi possível carregar o gerador de Excel.");
- const filiais=await getFiliais();
+ const filiais=await getFiliais(),criterios=await getCriteriosStatus();
  const works=(await all("obras")).sort((a,b)=>String(a.patrimonio).localeCompare(String(b.patrimonio)));
  if(!works.length)return toast("Nenhuma obra cadastrada ainda.");
  exportXlsxBtn.disabled=true;const originalTxt=exportXlsxBtn.textContent;
@@ -338,22 +374,26 @@ async function exportAcervoXlsx(){
    {header:"Filial",key:"filial",width:16},
    {header:"Localização",key:"localizacao",width:20},
    {header:"Descrição",key:"descricao",width:32},
+   {header:"Valor Contábil",key:"valorContabil",width:18,style:{numFmt:'"R$" #,##0.00'}},
+   {header:"Valor da Última Avaliação",key:"valorUltimaAvaliacao",width:22,style:{numFmt:'"R$" #,##0.00'}},
+   {header:"Registrado",key:"registrado",width:16},
+   {header:"Status de Segurança",key:"statusSeguranca",width:18},
    {header:"Foto 1",key:"foto1",width:24},
    {header:"Foto 2",key:"foto2",width:24},
   ];
   ws.getRow(1).font={bold:true};
   const ROWPX=170,EMBEDSIZE=400,DISPLAYSIZE=155;
   for(let i=0;i<works.length;i++){
-   const o=works[i],rowNumber=i+2;
+   const o=works[i],rowNumber=i+2,nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);
    exportXlsxBtn.textContent=`Gerando… ${i+1}/${works.length}`;
-   ws.addRow({patrimonio:o.patrimonio||"",nome:o.nome||"",artista:o.artista||"",estilo:o.estilo||"",filial:nomeFilial(filiais,o.filial),localizacao:o.localizacao||"",descricao:o.descricao||""});
+   ws.addRow({patrimonio:o.patrimonio||"",nome:o.nome||"",artista:o.artista||"",estilo:o.estilo||"",filial:nomeFilial(filiais,o.filial),localizacao:o.localizacao||"",descricao:o.descricao||"",valorContabil:o.valorContabil??null,valorUltimaAvaliacao:o.valorUltimaAvaliacao??null,registrado:o.registrado||"",statusSeguranca:nivel?`Nível ${nivel}`:""});
    ws.getRow(rowNumber).height=ROWPX*.75;
    for(let f=0;f<2;f++){
     const foto=o.fotos?.[f];if(!foto)continue;
     try{
      const {buffer,width,height}=await imgToEmbed(foto,EMBEDSIZE,.85);
      const imgId=wb.addImage({buffer,extension:"jpeg"});
-     ws.addImage(imgId,{tl:{col:7+f,row:rowNumber-1},ext:fitBox(width,height,DISPLAYSIZE)});
+     ws.addImage(imgId,{tl:{col:11+f,row:rowNumber-1},ext:fitBox(width,height,DISPLAYSIZE)});
     }catch{}
    }
   }
@@ -366,15 +406,16 @@ async function exportAcervoXlsx(){
 }
 
 /* ---- Base informativa: exportação/edição em massa sem fotos ---- */
-const BASE_HEADERS=["Patrimonio","Nome","Artista","Estilo","Filial","Localizacao","Descricao"];
+const BASE_HEADERS=["Patrimonio","Nome","Artista","Estilo","Filial","Localizacao","Descricao","ValorContabil","ValorUltimaAvaliacao","Registrado"];
 async function exportBaseInformativa(){
  if(typeof ExcelJS==="undefined")return toast("Não foi possível carregar o gerador de Excel.");
  const works=(await all("obras")).sort((a,b)=>String(a.patrimonio).localeCompare(String(b.patrimonio)));
  if(!works.length)return toast("Nenhuma obra cadastrada ainda.");
+ const criterios=await getCriteriosStatus();
  const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet("Base");
- ws.columns=BASE_HEADERS.map(h=>({header:h,key:h,width:h==="Descricao"?36:h==="Nome"?28:18}));
+ ws.columns=[...BASE_HEADERS.map(h=>({header:h,key:h,width:h==="Descricao"?36:h==="Nome"?28:h.startsWith("Valor")?20:18})),{header:"StatusSeguranca (calculado, não editável)",key:"StatusSeguranca",width:30}];
  ws.getRow(1).font={bold:true};
- for(const o of works)ws.addRow({Patrimonio:o.patrimonio||"",Nome:o.nome||"",Artista:o.artista||"",Estilo:o.estilo||"",Filial:o.filial||"",Localizacao:o.localizacao||"",Descricao:o.descricao||""});
+ for(const o of works){const nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);ws.addRow({Patrimonio:o.patrimonio||"",Nome:o.nome||"",Artista:o.artista||"",Estilo:o.estilo||"",Filial:o.filial||"",Localizacao:o.localizacao||"",Descricao:o.descricao||"",ValorContabil:o.valorContabil??"",ValorUltimaAvaliacao:o.valorUltimaAvaliacao??"",Registrado:o.registrado||"",StatusSeguranca:nivel?`Nível ${nivel}`:""})}
  const buf=await wb.xlsx.writeBuffer();
  const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),a=document.createElement("a");
  a.href=URL.createObjectURL(blob);a.download=`acervo-base-informativa-${new Date().toISOString().slice(0,10)}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
@@ -396,13 +437,16 @@ async function importBaseInformativa(file){
   const row=ws.getRow(r).values;const pat=row[idxPat]?String(row[idxPat]).trim():"";if(!pat)continue;
   const o=byPat.get(pat.toLowerCase());if(!o){naoEncontrados++;continue}
   const get=k=>colIdx[k]?(row[colIdx[k]]!=null?String(row[colIdx[k]]).trim():""):undefined;
-  const nome=get("nome"),artista=get("artista"),estilo=get("estilo"),filial=get("filial"),localizacao=get("localizacao"),descricao=get("descricao");
+  const nome=get("nome"),artista=get("artista"),estilo=get("estilo"),filial=get("filial"),localizacao=get("localizacao"),descricao=get("descricao"),valorContabil=get("valorcontabil"),valorUltimaAvaliacao=get("valorultimaavaliacao"),registrado=get("registrado");
   if(nome!==undefined)o.nome=nome||o.nome;
   if(artista!==undefined)o.artista=artista;
   if(estilo!==undefined){o.estilo=estilo;if(estilo&&!estilos.includes(estilo)){estilos.push(estilo);estilosMudou=true}}
   if(filial!==undefined&&filial)o.filial=filial;
   if(localizacao!==undefined)o.localizacao=localizacao;
   if(descricao!==undefined)o.descricao=descricao;
+  if(valorContabil!==undefined)o.valorContabil=valorContabil===""?null:Number(valorContabil.replace(",","."))||null;
+  if(valorUltimaAvaliacao!==undefined)o.valorUltimaAvaliacao=valorUltimaAvaliacao===""?null:Number(valorUltimaAvaliacao.replace(",","."))||null;
+  if(registrado!==undefined)o.registrado=registrado;
   if(o.filial&&localizacao){const fl=filiais.find(x=>x.codigo===o.filial);if(fl&&localizacao&&!fl.locais.includes(localizacao)){fl.locais.push(localizacao);filiaisMudou=true}}
   o.atualizadoEm=new Date().toISOString();
   await requestP(store("obras","readwrite").put(o));atualizados++;
@@ -417,6 +461,32 @@ function setupBaseInformativa(){
  exportBaseBtn.onclick=exportBaseInformativa;
  importBaseBtn.onclick=()=>importBaseFile.click();
  importBaseFile.onchange=async()=>{const f=importBaseFile.files[0];if(!f)return;try{await importBaseInformativa(f)}catch(e){console.error(e);importBaseStatus.textContent="Falha ao importar: "+(e.message||"arquivo incompatível")}finally{importBaseFile.value=""}};
+}
+
+async function exportRelatorioSeguranca(){
+ if(typeof ExcelJS==="undefined")return toast("Não foi possível carregar o gerador de Excel.");
+ const works=await all("obras");
+ if(!works.length)return toast("Nenhuma obra cadastrada ainda.");
+ const filiais=await getFiliais(),criterios=await getCriteriosStatus();
+ const rows=works.map(o=>({o,nivel:calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios)}));
+ rows.sort((a,b)=>(b.nivel||0)-(a.nivel||0)||String(a.o.nome||"").localeCompare(String(b.o.nome||""),"pt-BR"));
+ const wb=new ExcelJS.Workbook();const ws=wb.addWorksheet("Valores e Segurança",{views:[{state:"frozen",ySplit:1}]});
+ ws.columns=[
+  {header:"Patrimônio",key:"patrimonio",width:16},
+  {header:"Nome",key:"nome",width:28},
+  {header:"Filial",key:"filial",width:16},
+  {header:"Localização",key:"localizacao",width:20},
+  {header:"Valor Contábil",key:"valorContabil",width:18,style:{numFmt:'"R$" #,##0.00'}},
+  {header:"Valor da Última Avaliação",key:"valorUltimaAvaliacao",width:22,style:{numFmt:'"R$" #,##0.00'}},
+  {header:"Registrado",key:"registrado",width:16},
+  {header:"Nível de Status",key:"nivelTexto",width:20},
+ ];
+ ws.getRow(1).font={bold:true};
+ for(const {o,nivel} of rows)ws.addRow({patrimonio:o.patrimonio||"",nome:o.nome||"",filial:nomeFilial(filiais,o.filial),localizacao:o.localizacao||"",valorContabil:o.valorContabil??null,valorUltimaAvaliacao:o.valorUltimaAvaliacao??null,registrado:o.registrado||"",nivelTexto:nivel?`Nível ${nivel}`:"—"});
+ const buf=await wb.xlsx.writeBuffer();
+ const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(blob);a.download=`acervo-valores-seguranca-${new Date().toISOString().slice(0,10)}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+ toast("Relatório exportado.");
 }
 
 /* ---- Importação de acervo preparada a partir do Excel (formato próprio, com fotos) ---- */
@@ -620,12 +690,12 @@ async function renderDashboard(){
 
 function isDesktopLike(){const uaMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);return !uaMobile&&window.innerWidth>=820}
 function applyXlsxVisibility(){const ok=isDesktopLike();exportXlsxBtn.classList.toggle("hidden",!ok);xlsxMobileNotice.classList.toggle("hidden",ok)}
-function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();exportXlsxBtn.onclick=exportAcervoXlsx;resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks;applyXlsxVisibility();window.addEventListener("resize",applyXlsxVisibility)}
+function setupActions(){exportBtn.onclick=exportBackup;importBtn.onclick=()=>importFile.click();importFile.onchange=async()=>{if(importFile.files[0])await importBackup(importFile.files[0]);importFile.value=""};exportCsvBtn.onclick=()=>exportCsv();exportLatestBtn.onclick=()=>exportCsv();exportXlsxBtn.onclick=exportAcervoXlsx;exportSegurancaBtn.onclick=exportRelatorioSeguranca;resetAllBtn.onclick=resetAll;searchInput.oninput=renderArtworks;applyXlsxVisibility();window.addEventListener("resize",applyXlsxVisibility)}
 
 (async()=>{
  db=await openDB();
  const migrou=await migrarFilialEstilo();
- setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCropTool();setupEstilos();setupFiliais();setupDocumentos();setupBaseInformativa();setupConferenceContext();
+ setupNav();setupDialogs();setupInstall();setupInputs();setupActions();setupCatalogImport();setupCropTool();setupEstilos();setupFiliais();setupDocumentos();setupBaseInformativa();setupConferenceContext();setupCriterios();
  await loadConferenciaAtiva();
  renderArtworks();renderHistory();
  ensureStoragePersisted().then(renderStorageStatus);

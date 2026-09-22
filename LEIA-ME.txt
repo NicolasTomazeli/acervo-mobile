@@ -1,0 +1,11 @@
+ACERVO MOBILE V0.5.3 — BASE ESTÁVEL V0.5.2
+
+O motor de reconhecimento da V0.5.2 foi preservado.
+
+Nova área: Ajustes > Gerenciar acervo
+- Exportar acervo: obras + dados + fotos + referências visuais.
+- Importar acervo: adicionar ao atual ou substituir o atual.
+- Excluir acervo: remove obras/fotos/referências, preservando conferências.
+
+Backup completo continua separado.
+Recomendação: exporte o acervo antes de substituir ou excluir.

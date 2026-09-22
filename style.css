@@ -131,3 +131,11 @@ label{display:block;font-size:12px;font-weight:800;margin-top:12px;color:var(--n
 .ctx-active button{flex:none}
 .ctx-empty{background:#fff;border:1px solid var(--line);border-radius:17px;padding:18px;text-align:center}
 .ctx-empty p{margin:0 0 12px}
+
+/* V0.5.6 — status de segurança (valor da última avaliação) */
+.status-badge-wrap{margin:-10px 0 4px}
+.status-badge{display:inline-block;font-size:12px;font-weight:800;padding:4px 11px;border-radius:999px}
+.status-badge.status-1{background:#E6F4EA;color:#1E7B34}
+.status-badge.status-2{background:#FFF3D6;color:#8A5A00}
+.status-badge.status-3{background:#FBE4E1;color:#B0281C}
+.art-main .status-badge{margin-left:6px;vertical-align:middle}

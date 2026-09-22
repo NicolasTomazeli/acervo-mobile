@@ -1,0 +1,226 @@
+ACERVO MOBILE V0.5.5 — TESTE (auditoria Claude sobre a base V0.5.4)
+Base: V0.5.4 teste. Motor de similaridade preservado (pesos da V0.5.4: cor com peso 0,38 + penalidade cromática).
+
+NOVIDADE PRINCIPAL: RECORTE DA OBRA (marcar só a obra, sem parede/piso)
+Testei com as fotos reais do seu backup (caso Oscilação Escarlate): recortando manualmente
+só a tela do quadro, tirando a parede e o piso da conta, a obra correta saiu de 71,1% e
+3º lugar para 80,9% e 1º lugar, com 14 pontos de vantagem para o segundo colocado — muito
+melhor do que qualquer ajuste de peso/fórmula. A causa é a mesma de sempre: parede e piso
+são parecidos entre praticamente todas as fotos do prédio, e isso "afoga" a cor real da
+obra quando a foto inteira entra na conta.
+
+Por isso, esta versão adiciona uma ferramenta de recorte:
+- Ao adicionar fotos novas de referência (cadastro) ou fotos para conferência, agora
+  aparece uma tela pra arrastar os cantos e marcar só a obra, antes de salvar/analisar.
+  Também dá pra tocar em "Usar foto inteira" se não quiser recortar aquela foto.
+- Nas obras já cadastradas, cada foto atual agora tem um botão de tesoura (✂️) pra
+  recortar depois — a foto e o descritor de reconhecimento são atualizados na hora,
+  mas só valem de verdade depois de tocar em "Salvar alterações".
+- Não precisa recortar as 55 obras de uma vez. Recomendo priorizar as obras que mais
+  se confundem entre si (cores/composições parecidas) primeiro.
+
+O QUE MAIS MUDOU NESTA VERSÃO (sem risco, já testado):
+1. Corrigido: o LEIA-ME da V0.5.4 dizia "localização automática exige score >= 95%", mas
+   o código nunca mudou esse número — continua em 82% (AUTO_THRESHOLD=.82), igual à
+   V0.5.2. Este arquivo agora descreve o valor real.
+2. Adicionado: tocar na foto de um candidato pendente agora abre uma comparação
+   ampliada, lado a lado, foto tirada na conferência × foto cadastrada.
+3. Corrigido um vazamento de memória nas miniaturas de referência dos candidatos.
+
+O QUE EU TESTEI E NÃO EMBARQUEI (contexto, já investigado — não precisa refazer):
+Cheguei a implementar uma correção automática (tirar o preenchimento branco das bordas
+sem exigir recorte manual) e testei contra as 11 conferências reais do seu backup.
+Resultado: não foi uma melhora líquida — não resolveu a Oscilação Escarlate e ainda
+quebrou um caso que já funcionava (conferência #61, Os Girassois). Por isso revertei
+essa mudança automática e fui pelo caminho do recorte manual, que os números mostram
+ser bem mais eficaz.
+
+RECOMENDAÇÃO DE USO: continuar tratando resultado abaixo de altíssima confiança como
+PENDENTE e usar a comparação visual lado a lado pra confirmar manualmente. O recorte
+ajuda o algoritmo a acertar mais, mas a revisão humana continua sendo a rede de
+segurança real do sistema.
+
+---
+
+ATUALIZAÇÃO: DADOS SUMINDO + CAMPO TÉCNICA + GERENCIADOR DE TÉCNICAS
+
+1) Sobre o acervo/conferências "resetando" (time usa só Android/Samsung):
+Confirmando: os dados SEMPRE foram só locais neste app (IndexedDB do navegador, sem
+servidor, sem internet envolvida em nenhum momento pra guardar o que vocês cadastram).
+"Site" e "app instalado" são a mesma origem, por isso compartilham a mesma memória —
+isso é esperado e não é a causa do problema. Confirmei inclusive na documentação
+oficial do Chrome: mesmo instalado como app (ícone na tela), ele usa exatamente o
+mesmo perfil/armazenamento do navegador — nada é separado.
+
+A causa mais provável no caso de vocês, confirmada: em Configurações do Android → Apps,
+tanto o Chrome quanto o app instalado (aparece com o nome/ícone do Acervo) têm dois
+botões parecidos mas bem diferentes:
+- "Limpar cache" — seguro, só remove arquivos temporários, não apaga nada do acervo.
+- "Limpar dados" (às vezes aparece como "Limpar armazenamento") — apaga tudo, inclusive
+  o acervo e as conferências. É fácil confundir os dois, e alguém no time (ou um app de
+  "limpeza de celular") pode acabar tocando nesse botão sem saber o que ele realmente
+  apaga.
+O "Otimizar agora" e a "Otimização automática diária" do Device Care do Samsung NÃO
+entram nessa lista de risco — eles só limpam cache/memória, nunca os dados dos apps.
+Podem continuar usando essa função sem medo.
+
+O que eu adicionei nesta versão pra reduzir o risco:
+- O app agora pede ao navegador pra marcar esse armazenamento como protegido contra
+  limpeza automática (nem todo navegador aceita o pedido, mas não custa nada pedir).
+- Em Ajustes, tem um novo card "Armazenamento local" com esse aviso sobre "Limpar
+  dados" x "Limpar cache", quanto espaço está sendo usado, e um alerta se o último
+  backup exportado estiver desatualizado (ou nunca tiver sido feito).
+Mesmo com isso, nenhum app 100% local (sem servidor) consegue garantir zero risco de
+perda — por isso o hábito de exportar backup regularmente continua sendo a proteção
+mais confiável, principalmente se alguém no time mexer em Configurações do celular sem
+saber desse detalhe.
+
+2) Campo Técnica agora é gerenciável:
+Em Ajustes → "Técnicas / estilos de obra" dá pra adicionar ou remover as opções que
+aparecem no campo Técnica do cadastro (veio com Pintura, Escultura e Cerâmica de
+início). O campo no formulário passa a listar exatamente o que estiver cadastrado ali.
+
+3) Exportação do acervo completo em Excel (com fotos):
+Em Ajustes → "Acervo completo em Excel" gera um arquivo .xlsx com uma linha por obra
+(patrimônio, nome, artista, técnica, localização, descrição) e até 2 fotos de cada obra
+embutidas na própria planilha, prontas pra visualizar sem precisar abrir outro arquivo.
+Tudo é gerado no próprio celular (biblioteca ExcelJS incluída no app, funciona offline
+depois do primeiro carregamento) — nenhuma foto ou dado passa por internet nesse
+processo. Acervos grandes podem levar alguns segundos pra gerar; o botão mostra o
+progresso (Gerando... X/Y) enquanto processa.
+
+---
+
+ATUALIZAÇÃO GRANDE: FILIAIS/LOCAIS, ESTILO, PAINÉIS, DOCUMENTOS, RELATÓRIOS (V0.5.6)
+
+Esta foi uma atualização grande, então vai um resumo organizado do que mudou, testado
+contra o seu backup real de 323 obras antes de fechar a versão.
+
+MIGRAÇÃO AUTOMÁTICA (roda sozinha, uma única vez, na primeira vez que abrir esta versão)
+Ao abrir o app atualizado, ele confere se já foi migrado; se não, faz automaticamente:
+- Cria a Filial "159" e preenche os locais dela com TODAS as localizações que já
+  existiam no seu acervo (testei: são 64 valores distintos, incluindo variações como
+  "Ao lado da Nave", "Ao lado da Nave do TBV" e "Ao lado na nave" — o app não tenta
+  adivinhar quais são a mesma coisa, só migra como estava. Vale uma limpeza manual
+  depois, em Ajustes → Filiais e locais, unindo o que for duplicado.
+- Preenche o campo Filial de toda obra com "159".
+- Copia o valor de Técnica de cada obra pro novo campo Estilo (Pintura, Escultura,
+  Cerâmica e Tapeçaria, que já eram usados no seu acervo, ficam disponíveis no
+  gerenciador de Estilos).
+Nada é apagado nesse processo — testei rodando essa migração contra seus 323 registros
+reais antes de fechar a versão, e nenhuma obra, foto ou dado foi perdido ou alterado
+além do que está descrito acima.
+
+1) "Gerenciar acervo" removido de Ajustes, como pedido — ficava redundante com "Backup
+completo", que já cobre exportar/importar tudo.
+
+2) Filiais e locais (Ajustes → Filiais e locais):
+Cada filial tem seu próprio código, nome e lista de locais — um local pertence só a
+uma filial. Dá pra criar novas filiais, e dentro de cada uma, adicionar/remover locais
+livremente. O campo Localização do cadastro de obra agora é uma lista que muda
+conforme a Filial escolhida.
+
+3) Campo Técnica virou Estilo:
+Mesmo gerenciador de antes (Ajustes → Estilos de obra), só que renomeado. Se vocês já
+tinham técnicas cadastradas, elas foram preservadas com o novo nome.
+
+4) Campo Filial no cadastro da obra:
+Select novo, populado pelas filiais cadastradas. Hoje, com só a Filial 159 existindo,
+ele já vem pré-selecionado sozinho.
+
+5) Conferência com contexto de filial/local + resolução de divergência:
+Antes de tirar as fotos pra conferir, agora é preciso escolher a Filial e o Local que
+está sendo conferido (o app lembra a última escolha como sugestão pra próxima vez). Se
+uma obra for identificada — automaticamente ou confirmada manualmente — e o cadastro
+dela apontar pra um local diferente do que está sendo conferido, aparece um aviso na
+tela de resultado com 3 opções: Atualizar cadastro (muda o local permanentemente),
+Por 30 dias (marca um local temporário que expira sozinho depois de 30 dias, voltando a
+valer o cadastro permanente) ou Manter (ignora e não muda nada). Enquanto o desvio
+temporário estiver valendo, o local "temporário até DD/MM" aparece marcado na listagem
+do acervo.
+
+6) Painéis (nova aba, ícone 📊):
+Mostra o total de obras cadastradas e um cartão por filial com a contagem de obras.
+Tocar numa filial abre a contagem por local dentro dela; cada local tem um botão
+"Abrir catálogo" que lista as obras daquele local, com foto e patrimônio/nome/artista.
+As contagens usam a localização "efetiva" da obra — ou seja, se tiver um desvio
+temporário de 30 dias ativo, ela aparece no local temporário, não no cadastrado.
+
+7) Base informativa — edição em massa (Ajustes → Base informativa):
+Exporta uma planilha .xlsx só com os campos de texto (sem fotos) — Patrimônio, Nome,
+Artista, Estilo, Filial, Localização, Descrição. Edite à vontade no Excel/Google
+Sheets e importe de volta: a atualização usa o Patrimônio pra encontrar cada obra e
+troca só esses campos — fotos, documentos e descritores de reconhecimento não são
+tocados. Se você digitar um Estilo ou Localização que ainda não existe, o app cadastra
+automaticamente na lista correspondente. Testei esse fluxo completo (exportar, editar,
+reimportar) contra seus dados reais antes de fechar a versão.
+
+8) Documentos anexados à obra:
+No cadastro/edição de cada obra, dá pra anexar documentos (nota fiscal, termo de
+doação, etc.), marcando cada um como "Compra" ou "Doação". Ficam listados com nome,
+selo do tipo e um botão de remover; tocar no nome abre o arquivo numa aba nova. Os
+documentos entram no Backup completo (exportação/importação), então não se perdem
+numa restauração.
+
+O QUE EU NÃO TESTEI DIRETO NO NAVEGADOR (peço pra vocês confirmarem na prática):
+Testei a migração e a base informativa rodando o motor de dados de verdade contra o
+seu backup, fora do navegador, pra validar a lógica sem risco. O que eu não consegui
+simular fora do navegador foi a parte visual: o desenho dos Painéis, o formulário de
+Documentos (anexar/abrir um arquivo) e a tela de recorte continuam precisando do seu
+teste no celular mesmo — a lógica de dados por trás foi validada, mas a experiência de
+toque/tela ainda vale a pena conferir.
+
+---
+
+AJUSTES FINOS (pós-lançamento)
+
+1) Contraste dos chips: nas listas de Estilos e Locais, o texto estava escuro em cima
+de um fundo escuro (quase ilegível). Corrigido — texto branco agora.
+
+2) O catálogo dos Painéis voltava pro meio da tela ao trocar de local/filial. Agora
+sempre volta pro topo ao abrir uma nova tela do painel.
+
+3) Ordem alfabética em tudo, exceto o Acervo (que continua mostrando as adições mais
+recentes primeiro): lista de Estilos, lista de Locais dentro de cada filial, os
+seletores de Filial/Local/Estilo nos formulários, e os cartões de filial/local nos
+Painéis.
+
+4) Fluxo da conferência mudou: agora, ao entrar na aba Conferir sem uma conferência
+ativa, abre uma janela pra indicar a Filial e o Local. Depois de confirmar
+("Indicar conferência"), esse local fica valendo — aparece como um banner fixo no
+topo da aba — para todas as conferências que você rodar em seguida, sem perguntar de
+novo. Só quando tocar em "Encerrar conferência" é que ele libera pra escolher outro
+local (e some qualquer foto que estivesse selecionada e ainda não enviada). Esse
+estado fica salvo mesmo se você fechar e reabrir o app no meio do trabalho.
+
+---
+
+CAMPOS FINANCEIROS E STATUS DE SEGURANÇA
+
+Novos campos no cadastro da obra:
+- Valor Contábil (R$)
+- Valor da Última Avaliação (R$)
+- Registrado / Não Registrado
+- Status de segurança — não é um campo que você preenche. Ele é calculado
+  automaticamente a partir do Valor da Última Avaliação, e aparece como um selo
+  colorido (verde/amarelo/vermelho) tanto no formulário, ao vivo enquanto você
+  digita, quanto na listagem do Acervo.
+
+Critérios (Ajustes → Critérios de status de segurança):
+Você define até qual valor cada obra entra no Nível 1 (mais seguro) e até qual valor
+entra no Nível 2 — qualquer coisa acima disso vira Nível 3 (mais crítico). Comecei com
+R$ 50.000 e R$ 200.000 como ponto de partida, mas isso é só um chute inicial — ajuste
+pra realidade do seu acervo assim que puder. Importante: o status NÃO fica gravado na
+obra — ele é recalculado na hora, sempre que exibido. Ou seja, se você mudar esses
+critérios depois, todas as obras já cadastradas atualizam o status sozinhas, sem
+precisar reabrir e resalvar cada uma.
+
+Relatório novo (Ajustes → Relatório de valores e status de segurança):
+Planilha enxuta (sem fotos) com patrimônio, nome, filial, local, os dois valores,
+registrado e o nível — já ordenada com as obras mais críticas (Nível 3) no topo, pra
+facilitar priorizar o que olhar primeiro.
+
+Os três campos editáveis (Valor Contábil, Valor da Última Avaliação, Registrado)
+também entraram na Base informativa (exportar/editar em massa/reimportar), no CSV por
+conferência e no Excel completo com fotos — pra ficar tudo consistente entre os
+relatórios que já existiam.
