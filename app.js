@@ -421,32 +421,50 @@ async function exportBaseInformativa(){
  a.href=URL.createObjectURL(blob);a.download=`acervo-base-informativa-${new Date().toISOString().slice(0,10)}.xlsx`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
  toast("Base informativa exportada.");
 }
+function cellPlainValue(v){
+ if(v==null)return"";
+ if(typeof v==="object"){
+  if("result"in v)return v.result==null?"":v.result;
+  if("richText"in v)return v.richText.map(t=>t.text).join("");
+  if("text"in v)return v.text;
+  if(v instanceof Date)return v;
+  return"";
+ }
+ return v;
+}
+function normalizarRegistrado(v){
+ const s=String(v??"").trim().toLowerCase();
+ if(!s)return"";
+ if(["sim","s","yes","y","registrado","true","1"].includes(s))return"Registrado";
+ if(["não","nao","n","no","não registrado","nao registrado","false","0"].includes(s))return"Não Registrado";
+ return String(v).trim();
+}
 async function importBaseInformativa(file){
  if(typeof ExcelJS==="undefined"){importBaseStatus.textContent="Não foi possível carregar o leitor de Excel.";return}
  importBaseStatus.textContent="Lendo planilha…";
  const wb=new ExcelJS.Workbook();await wb.xlsx.load(await file.arrayBuffer());
  const ws=wb.worksheets[0];if(!ws){importBaseStatus.textContent="Planilha vazia ou inválida.";return}
  const headerRow=ws.getRow(1).values;const colIdx={};
- headerRow.forEach((v,i)=>{if(v)colIdx[String(v).trim().toLowerCase()]=i});
+ headerRow.forEach((v,i)=>{if(v)colIdx[String(cellPlainValue(v)).trim().toLowerCase()]=i});
  const idxPat=colIdx["patrimonio"];
  if(!idxPat){importBaseStatus.textContent='Coluna "Patrimonio" não encontrada na planilha.';return}
  const obras=await all("obras"),byPat=new Map(obras.map(o=>[String(o.patrimonio||"").trim().toLowerCase(),o]));
  const filiais=await getFiliais(),estilos=await getEstilos();let filiaisMudou=false,estilosMudou=false;
  let atualizados=0,naoEncontrados=0;
  for(let r=2;r<=ws.rowCount;r++){
-  const row=ws.getRow(r).values;const pat=row[idxPat]?String(row[idxPat]).trim():"";if(!pat)continue;
+  const row=ws.getRow(r).values;const pat=row[idxPat]!=null?String(cellPlainValue(row[idxPat])).trim():"";if(!pat)continue;
   const o=byPat.get(pat.toLowerCase());if(!o){naoEncontrados++;continue}
-  const get=k=>colIdx[k]?(row[colIdx[k]]!=null?String(row[colIdx[k]]).trim():""):undefined;
-  const nome=get("nome"),artista=get("artista"),estilo=get("estilo"),filial=get("filial"),localizacao=get("localizacao"),descricao=get("descricao"),valorContabil=get("valorcontabil"),valorUltimaAvaliacao=get("valorultimaavaliacao"),registrado=get("registrado");
+  const get=k=>colIdx[k]?(row[colIdx[k]]!=null?String(cellPlainValue(row[colIdx[k]])).trim():""):undefined;
+  const nome=get("nome"),artista=get("artista"),estilo=get("estilo"),filial=get("filial"),localizacao=get("localizacao"),descricao=get("descricao"),valorContabil=get("valorcontabil"),valorUltimaAvaliacao=get("valorultimaavaliacao"),registradoRaw=get("registrado");
   if(nome!==undefined)o.nome=nome||o.nome;
   if(artista!==undefined)o.artista=artista;
   if(estilo!==undefined){o.estilo=estilo;if(estilo&&!estilos.includes(estilo)){estilos.push(estilo);estilosMudou=true}}
   if(filial!==undefined&&filial)o.filial=filial;
   if(localizacao!==undefined)o.localizacao=localizacao;
   if(descricao!==undefined)o.descricao=descricao;
-  if(valorContabil!==undefined)o.valorContabil=valorContabil===""?null:Number(valorContabil.replace(",","."))||null;
-  if(valorUltimaAvaliacao!==undefined)o.valorUltimaAvaliacao=valorUltimaAvaliacao===""?null:Number(valorUltimaAvaliacao.replace(",","."))||null;
-  if(registrado!==undefined)o.registrado=registrado;
+  if(valorContabil!==undefined){const n=Number(valorContabil.replace(",","."));o.valorContabil=valorContabil===""||isNaN(n)?null:n}
+  if(valorUltimaAvaliacao!==undefined){const n=Number(valorUltimaAvaliacao.replace(",","."));o.valorUltimaAvaliacao=valorUltimaAvaliacao===""||isNaN(n)?null:n}
+  if(registradoRaw!==undefined)o.registrado=normalizarRegistrado(registradoRaw);
   if(o.filial&&localizacao){const fl=filiais.find(x=>x.codigo===o.filial);if(fl&&localizacao&&!fl.locais.includes(localizacao)){fl.locais.push(localizacao);filiaisMudou=true}}
   o.atualizadoEm=new Date().toISOString();
   await requestP(store("obras","readwrite").put(o));atualizados++;
@@ -641,6 +659,28 @@ function setupFiliais(){
 }
 
 /* ---- Painéis (dashboards) ---- */
+function renderResumoFinanceiro(lista,criterios){
+ const totalN=lista.length||1;
+ const comValor=lista.filter(o=>o.valorUltimaAvaliacao!=null);
+ const semValor=lista.length-comValor.length;
+ const porNivel={1:0,2:0,3:0};
+ comValor.forEach(o=>{const n=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);if(n)porNivel[n]++});
+ const totalContabil=lista.reduce((s,o)=>s+(Number(o.valorContabil)||0),0);
+ const totalAvaliacao=lista.reduce((s,o)=>s+(Number(o.valorUltimaAvaliacao)||0),0);
+ const brl=v=>v.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+ const pct=(n,total)=>total?Math.max(0,Math.round(n/total*100)):0;
+ const comN=comValor.length||1;
+ return `<div class="card resumo-financeiro">
+  <h4>Avaliação registrada</h4>
+  <div class="resumo-bar"><div class="resumo-seg seg-com" style="width:${pct(comValor.length,totalN)}%"></div><div class="resumo-seg seg-sem" style="width:${pct(semValor,totalN)}%"></div></div>
+  <div class="resumo-legend"><span><i class="dot dot-com"></i>${comValor.length} cadastrada(s)</span><span><i class="dot dot-sem"></i>${semValor} não cadastrada(s)</span></div>
+  ${comValor.length?`<h4>Nível de status (das cadastradas)</h4>
+  <div class="resumo-bar"><div class="resumo-seg seg-n1" style="width:${pct(porNivel[1],comN)}%"></div><div class="resumo-seg seg-n2" style="width:${pct(porNivel[2],comN)}%"></div><div class="resumo-seg seg-n3" style="width:${pct(porNivel[3],comN)}%"></div></div>
+  <div class="resumo-legend"><span><i class="dot dot-n1"></i>Nível 1: ${porNivel[1]}</span><span><i class="dot dot-n2"></i>Nível 2: ${porNivel[2]}</span><span><i class="dot dot-n3"></i>Nível 3: ${porNivel[3]}</span></div>`:""}
+  <h4>Valor total</h4>
+  <div class="resumo-valores"><div><span class="muted">Valor Contábil</span><b>${brl(totalContabil)}</b></div><div><span class="muted">Valor da Última Avaliação</span><b>${brl(totalAvaliacao)}</b></div></div>
+ </div>`;
+}
 async function renderDashboard(){
  window.scrollTo(0,0);
  const obras=await all("obras"),filiais=await getFiliais();
@@ -657,11 +697,11 @@ async function renderDashboard(){
    grid.append(card);
   });
  } else if(dashboardStage==="locais"){
-  const fl=filiais.find(x=>x.codigo===dashboardFilial);
+  const fl=filiais.find(x=>x.codigo===dashboardFilial),criterios=await getCriteriosStatus();
+  const listaFilial=obras.filter(o=>efetivoLocal(o).filial===dashboardFilial);
   const porLocal=new Map();
-  for(const o of obras){const ef=efetivoLocal(o);if(ef.filial===dashboardFilial)porLocal.set(ef.localizacao,(porLocal.get(ef.localizacao)||0)+1)}
-  const totalFilial=[...porLocal.values()].reduce((s,x)=>s+x,0);
-  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn">← Filiais</button><div class="dash-total"><b>${totalFilial}</b><span>obra(s) em ${esc(fl?.nome||dashboardFilial)}</span></div><div class="dash-grid" id="dashLocaisGrid"></div>`;
+  for(const o of listaFilial){const ef=efetivoLocal(o);porLocal.set(ef.localizacao,(porLocal.get(ef.localizacao)||0)+1)}
+  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn">← Filiais</button><div class="dash-total"><b>${listaFilial.length}</b><span>obra(s) em ${esc(fl?.nome||dashboardFilial)}</span></div>${renderResumoFinanceiro(listaFilial,criterios)}<div class="dash-grid" id="dashLocaisGrid"></div>`;
   document.getElementById("dashBackBtn").onclick=()=>{dashboardStage="filiais";renderDashboard()};
   const grid=document.getElementById("dashLocaisGrid");
   const locais=[...porLocal.keys()].sort((a,b)=>(a||"").localeCompare(b||"","pt-BR"));
@@ -675,7 +715,7 @@ async function renderDashboard(){
  } else if(dashboardStage==="catalogo"){
   const fl=filiais.find(x=>x.codigo===dashboardFilial),criterios=await getCriteriosStatus();
   const lista=obras.filter(o=>{const ef=efetivoLocal(o);return ef.filial===dashboardFilial&&ef.localizacao===dashboardLocal}).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
-  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn2">← ${esc(fl?.nome||dashboardFilial)}</button><div class="dash-total"><b>${lista.length}</b><span>obra(s) em ${esc(dashboardLocal||"-")}</span></div><div class="dash-catalog" id="dashCatalogList"></div>`;
+  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn2">← ${esc(fl?.nome||dashboardFilial)}</button><div class="dash-total"><b>${lista.length}</b><span>obra(s) em ${esc(dashboardLocal||"-")}</span></div>${renderResumoFinanceiro(lista,criterios)}<div class="dash-catalog" id="dashCatalogList"></div>`;
   document.getElementById("dashBackBtn2").onclick=()=>{dashboardStage="locais";renderDashboard()};
   const listEl=document.getElementById("dashCatalogList");
   lista.forEach(o=>{

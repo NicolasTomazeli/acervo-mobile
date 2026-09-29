@@ -147,3 +147,21 @@ label{display:block;font-size:12px;font-weight:800;margin-top:12px;color:var(--n
 .obra-info-label{display:block;color:var(--muted);font-size:12px;font-weight:700;margin-bottom:2px}
 .obra-info-grid b{font-size:15px;color:var(--text)}
 .obra-info-status{border-top:1px solid var(--line);padding-top:12px;display:flex;align-items:center;gap:10px}
+
+/* V0.5.7 — resumo financeiro (gráficos de barras) em Painéis */
+.resumo-financeiro{margin-bottom:14px}
+.resumo-financeiro h4{margin:14px 0 6px;font-size:13px;color:var(--muted);font-weight:800}
+.resumo-financeiro h4:first-child{margin-top:0}
+.resumo-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:#EEF2F7}
+.resumo-seg{height:100%}
+.resumo-seg.seg-com{background:#2FA84F}
+.resumo-seg.seg-sem{background:#C9D3E0}
+.resumo-seg.seg-n1{background:#2FA84F}
+.resumo-seg.seg-n2{background:#F2B705}
+.resumo-seg.seg-n3{background:#E5473C}
+.resumo-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:8px;font-size:12.5px;color:var(--text)}
+.resumo-legend .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.dot-com{background:#2FA84F}.dot-sem{background:#C9D3E0}.dot-n1{background:#2FA84F}.dot-n2{background:#F2B705}.dot-n3{background:#E5473C}
+.resumo-valores{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.resumo-valores span{display:block;color:var(--muted);font-size:12px;font-weight:700;margin-bottom:2px}
+.resumo-valores b{font-size:15px;color:var(--navy)}
