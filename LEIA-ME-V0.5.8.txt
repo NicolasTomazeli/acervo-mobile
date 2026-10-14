@@ -1,0 +1,33 @@
+ACERVO MOBILE V0.5.8 — ABAS FIXAS NO TOPO + DASHBOARD NOS PAINÉIS
+
+1) ABAS FIXAS NO TOPO
+As abas (Acervo, Conferir, Resultados, Painéis, Ajustes) saíram do rodapé e agora ficam
+logo abaixo do cabeçalho azul, sempre visíveis no topo, mesmo rolando a tela — no
+celular e no computador. No celular o cabeçalho ficou um pouco mais compacto pra não
+ocupar muito espaço.
+
+2) PAINÉIS (VISÃO GERAL)
+- Gráfico de rosca "Registro do acervo": Registradas x Não registradas x A selecionar
+  (obras com o campo Registrado vazio), com quantidade e percentual de cada.
+- Cartão "Registradas sem nº de patrimônio": quantas obras estão marcadas como
+  Registrado mas com o campo Patrimônio vazio. O botão "Ver lista" abre essas obras
+  (com foto e local) — tocar em uma abre o painel informativo dela.
+- Cada cartão de filial agora mostra também quantas registradas ela tem e o %.
+
+3) PAINÉIS > FILIAL
+- Mesmo gráfico de registro e mesmo cartão de "sem nº de patrimônio", só que filtrados
+  pela filial.
+- Novo "Top 10 localizações": quantidade de obras e valor avaliado (soma do Valor da
+  Última Avaliação) por local. Por padrão ordena pelo valor avaliado; dá pra trocar
+  pra "Quantidade" no seletor. Também avisa quantas obras do local estão sem avaliação.
+  Tocar num local abre o catálogo dele.
+- O resumo financeiro e a lista de todos os locais continuam abaixo.
+
+Os números usam o local "efetivo" (respeita desvio temporário de 30 dias), igual ao
+restante dos Painéis. Nada no banco de dados foi alterado — é só leitura.
+
+4) LISTAS POR SITUAÇÃO DE REGISTRO
+No gráfico de registro (visão geral e dentro de cada filial), tocar em "Registradas",
+"Não registradas" ou "A selecionar" — na legenda ou na própria fatia da rosca — abre a
+lista dessas obras, com foto, patrimônio, artista e local. No topo da lista dá pra
+alternar entre as três categorias sem voltar. Tocar numa obra abre o painel dela.

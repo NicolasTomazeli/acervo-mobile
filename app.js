@@ -33,7 +33,7 @@ function setupCriterios(){
  };
 }
 let db,deferredPrompt=null,referenceFiles=[],conferenceFiles=[],currentConferenceId=null,editingArtworkId=null,removedPhotoIndexes=new Set(),cropStateData=null,editedFotos=[],editedDescs=[],editedDocumentos=[],conferenciaAtivaFilial=null,conferenciaAtivaLocal=null;
-let dashboardStage="filiais",dashboardFilial=null,dashboardLocal=null;
+let dashboardStage="filiais",dashboardFilial=null,dashboardLocal=null,dashboardTopModo="valor",dashboardVoltarDe="filiais",dashboardFiltroRegistro=null;
 
 function requestP(r){return new Promise((a,b)=>{r.onsuccess=()=>a(r.result);r.onerror=()=>b(r.error)})}
 function store(n,m="readonly"){return db.transaction(n,m).objectStore(n)}
@@ -681,18 +681,67 @@ function renderResumoFinanceiro(lista,criterios){
   <div class="resumo-valores"><div><span class="muted">Valor Contábil</span><b>${brl(totalContabil)}</b></div><div><span class="muted">Valor da Última Avaliação</span><b>${brl(totalAvaliacao)}</b></div></div>
  </div>`;
 }
+/* ---- V0.5.8: dashboard de registro, top 10 locais, registradas sem patrimônio ---- */
+function classeRegistro(o){const r=normalizarRegistrado(o.registrado);if(r==="Registrado")return"reg";if(r==="Não Registrado")return"nao";return"sel"}
+function semPatrimonio(o){return !String(o.patrimonio??"").trim()}
+function registradaSemPatrimonio(o){return classeRegistro(o)==="reg"&&semPatrimonio(o)}
+const brlDash=v=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const pctTxt=(n,t)=>t?(n/t*100).toLocaleString("pt-BR",{maximumFractionDigits:1})+"%":"0%";
+function renderRegistroChart(lista,titulo){
+ const cont={reg:0,nao:0,sel:0};lista.forEach(o=>cont[classeRegistro(o)]++);
+ const total=lista.length,R=52,CIRC=2*Math.PI*R,GAP=total&&Object.values(cont).filter(Boolean).length>1?3:0;
+ const cats=[["reg","Registradas"],["nao","Não registradas"],["sel","A selecionar"]];
+ let off=0,segs="";
+ for(const [k,lbl] of cats){const n=cont[k];if(!n)continue;const len=n/total*CIRC;const vis=Math.max(len-GAP,0.5);
+  segs+=`<circle class="c-${k} donut-seg" data-reg="${k}" cx="75" cy="75" r="${R}" stroke-width="20" stroke-dasharray="${vis} ${CIRC-vis}" stroke-dashoffset="${-off}" transform="rotate(-90 75 75)"><title>${lbl}: ${n} (${pctTxt(n,total)})</title></circle>`;off+=len}
+ const legend=cats.map(([k,lbl])=>`<button type="button" class="donut-legend-row" data-reg="${k}" ${cont[k]?"":"disabled"} title="Ver lista: ${lbl}"><i class="sw c-${k}"></i><span>${lbl}</span><b>${cont[k]}<small>${pctTxt(cont[k],total)}</small></b><em>›</em></button>`).join("");
+ return `<div class="card dash-chart-card"><h4>${esc(titulo)}</h4><div class="donut-wrap">
+  <svg class="donut" viewBox="0 0 150 150" role="img" aria-label="Registradas ${cont.reg}, não registradas ${cont.nao}, a selecionar ${cont.sel}"><circle class="donut-track" cx="75" cy="75" r="${R}" stroke-width="20"></circle>${segs}<text class="donut-num" x="75" y="78" text-anchor="middle">${total}</text><text class="donut-lbl" x="75" y="95" text-anchor="middle">OBRAS</text></svg>
+  <div class="donut-legend">${legend}<span class="donut-hint">Toque numa categoria para ver a lista</span></div></div></div>`;
+}
+function renderSemPatrimonioCard(lista){
+ const n=lista.filter(registradaSemPatrimonio).length;
+ return `<div class="card alert-card ${n?"":"ok"}"><div class="alert-num">${n}</div><div class="alert-txt"><b>Registradas sem nº de patrimônio</b><span>${n?"Obras marcadas como Registrado, mas com o campo Patrimônio vazio.":"Todas as obras registradas têm número de patrimônio."}</span></div>${n?`<button type="button" class="secondary" id="dashSemPatBtn">Ver lista</button>`:""}</div>`;
+}
+function bindRegistroChart(){document.querySelectorAll("[data-reg]").forEach(el=>el.addEventListener("click",()=>{dashboardVoltarDe=dashboardStage;dashboardFiltroRegistro=el.dataset.reg;dashboardStage="registroLista";renderDashboard()}))}
+function bindSemPatrimonioBtn(){const b=document.getElementById("dashSemPatBtn");if(b)b.onclick=()=>{dashboardVoltarDe=dashboardStage;dashboardStage="semPatrimonio";renderDashboard()}}
+function renderTopLocais(lista){
+ const m=new Map();
+ for(const o of lista){const loc=efetivoLocal(o).localizacao||"";const e=m.get(loc)||{loc,qtd:0,valor:0,semValor:0};e.qtd++;if(o.valorUltimaAvaliacao!=null&&o.valorUltimaAvaliacao!=="")e.valor+=Number(o.valorUltimaAvaliacao)||0;else e.semValor++;m.set(loc,e)}
+ const porValor=dashboardTopModo==="valor";
+ const rows=[...m.values()].sort((a,b)=>porValor?(b.valor-a.valor||b.qtd-a.qtd):(b.qtd-a.qtd||b.valor-a.valor)).slice(0,10);
+ const max=Math.max(...rows.map(r=>porValor?r.valor:r.qtd),0)||1;
+ const body=rows.length?rows.map((r,i)=>{const v=porValor?r.valor:r.qtd;return `<button type="button" class="top-row" data-loc="${esc(r.loc)}" title="Abrir catálogo de ${esc(r.loc||"(sem local)")}"><span class="top-rank">${i+1}</span><span class="top-main"><span class="top-line"><b>${esc(r.loc||"(sem local)")}</b><span>${porValor?brlDash(r.valor):r.qtd+" obra(s)"}</span></span><span class="top-bar"><i style="width:${(v/max*100).toFixed(1)}%"></i></span><span class="top-sub">${porValor?`${r.qtd} obra(s)`:`Avaliado: ${brlDash(r.valor)}`}${r.semValor?` · ${r.semValor} sem avaliação`:""}</span></span></button>`}).join(""):`<p class="muted">Nenhuma obra nesta filial ainda.</p>`;
+ return `<div class="card dash-chart-card"><div class="top-head"><h4>Top 10 localizações</h4><div class="seg-toggle" role="group" aria-label="Ordenar por"><button type="button" data-modo="valor" class="${porValor?"on":""}">Valor avaliado</button><button type="button" data-modo="qtd" class="${porValor?"":"on"}">Quantidade</button></div></div><div class="top-list" id="dashTopList">${body}</div></div>`;
+}
+function bindTopLocais(){
+ document.querySelectorAll(".seg-toggle button[data-modo]").forEach(b=>b.onclick=()=>{dashboardTopModo=b.dataset.modo;const y=window.scrollY;renderDashboard().then(()=>window.scrollTo(0,y))});
+ document.querySelectorAll("#dashTopList .top-row").forEach(b=>b.onclick=()=>{dashboardStage="catalogo";dashboardLocal=b.dataset.loc;renderDashboard()});
+}
+function renderCatalogItems(listEl,lista,criterios,mostrarLocal){
+ lista.forEach(o=>{
+  const row=document.createElement("div");row.className="dash-item";row.tabIndex=0;
+  const im=new Image();if(o.fotos?.[0])im.src=url(o.fotos[0]);
+  const nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios),ef=efetivoLocal(o);
+  const info=document.createElement("div");info.className="dash-item-info";
+  info.innerHTML=`<b>${esc(o.nome||"Sem título")}</b>${statusBadgeHtml(nivel)}<span class="meta">${esc(o.patrimonio||"Sem patrimônio")}</span><span class="meta">${esc(o.artista||"-")}</span>${mostrarLocal?`<span class="meta">📍 ${esc(ef.localizacao||"(sem local)")}</span>`:""}`;
+  row.append(im,info);row.onclick=()=>openObraInfo(o.id);listEl.append(row);
+ });
+}
 async function renderDashboard(){
  window.scrollTo(0,0);
  const obras=await all("obras"),filiais=await getFiliais();
  if(dashboardStage==="filiais"){
   const porFilial=new Map();
-  for(const o of obras){const ef=efetivoLocal(o);porFilial.set(ef.filial,(porFilial.get(ef.filial)||0)+1)}
-  dashboardRoot.innerHTML=`<div class="dash-total"><b>${obras.length}</b><span>obras cadastradas no total</span></div><div class="dash-grid" id="dashFiliaisGrid"></div>`;
+  for(const o of obras){const ef=efetivoLocal(o);const e=porFilial.get(ef.filial)||{n:0,reg:0};e.n++;if(classeRegistro(o)==="reg")e.reg++;porFilial.set(ef.filial,e)}
+  dashboardRoot.innerHTML=`<div class="dash-total"><b>${obras.length}</b><span>obras cadastradas no total</span></div>${renderRegistroChart(obras,"Registro do acervo")}${renderSemPatrimonioCard(obras)}<h3 class="dash-section-title">Filiais</h3><div class="dash-grid" id="dashFiliaisGrid"></div>`;
+  bindSemPatrimonioBtn();bindRegistroChart();
   const grid=document.getElementById("dashFiliaisGrid");
   if(!filiais.length){grid.innerHTML=`<p class="muted">Nenhuma filial cadastrada ainda. Cadastre em Ajustes → Filiais e locais.</p>`}
   filiais.slice().sort((a,b)=>a.nome.localeCompare(b.nome,"pt-BR")).forEach(fl=>{
+   const e=porFilial.get(fl.codigo)||{n:0,reg:0};
    const card=document.createElement("button");card.type="button";card.className="dash-card";
-   card.innerHTML=`<b>${esc(fl.nome)}</b><span class="dash-count">${porFilial.get(fl.codigo)||0} obra(s)</span>`;
+   card.innerHTML=`<div><b>${esc(fl.nome)}</b><span class="reg-mini">${e.reg} registrada(s) · ${pctTxt(e.reg,e.n)}</span></div><span class="dash-count">${e.n} obra(s)</span>`;
    card.onclick=()=>{dashboardStage="locais";dashboardFilial=fl.codigo;renderDashboard()};
    grid.append(card);
   });
@@ -701,8 +750,9 @@ async function renderDashboard(){
   const listaFilial=obras.filter(o=>efetivoLocal(o).filial===dashboardFilial);
   const porLocal=new Map();
   for(const o of listaFilial){const ef=efetivoLocal(o);porLocal.set(ef.localizacao,(porLocal.get(ef.localizacao)||0)+1)}
-  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn">← Filiais</button><div class="dash-total"><b>${listaFilial.length}</b><span>obra(s) em ${esc(fl?.nome||dashboardFilial)}</span></div>${renderResumoFinanceiro(listaFilial,criterios)}<div class="dash-grid" id="dashLocaisGrid"></div>`;
+  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn">← Filiais</button><div class="dash-total"><b>${listaFilial.length}</b><span>obra(s) em ${esc(fl?.nome||dashboardFilial)}</span></div>${renderRegistroChart(listaFilial,"Registro nesta filial")}${renderSemPatrimonioCard(listaFilial)}${renderTopLocais(listaFilial)}${renderResumoFinanceiro(listaFilial,criterios)}<h3 class="dash-section-title">Todos os locais</h3><div class="dash-grid" id="dashLocaisGrid"></div>`;
   document.getElementById("dashBackBtn").onclick=()=>{dashboardStage="filiais";renderDashboard()};
+  bindSemPatrimonioBtn();bindTopLocais();bindRegistroChart();
   const grid=document.getElementById("dashLocaisGrid");
   const locais=[...porLocal.keys()].sort((a,b)=>(a||"").localeCompare(b||"","pt-BR"));
   if(!locais.length)grid.innerHTML=`<p class="muted">Nenhuma obra registrada nesta filial ainda.</p>`;
@@ -717,15 +767,24 @@ async function renderDashboard(){
   const lista=obras.filter(o=>{const ef=efetivoLocal(o);return ef.filial===dashboardFilial&&ef.localizacao===dashboardLocal}).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
   dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn2">← ${esc(fl?.nome||dashboardFilial)}</button><div class="dash-total"><b>${lista.length}</b><span>obra(s) em ${esc(dashboardLocal||"-")}</span></div>${renderResumoFinanceiro(lista,criterios)}<div class="dash-catalog" id="dashCatalogList"></div>`;
   document.getElementById("dashBackBtn2").onclick=()=>{dashboardStage="locais";renderDashboard()};
-  const listEl=document.getElementById("dashCatalogList");
-  lista.forEach(o=>{
-   const row=document.createElement("div");row.className="dash-item";row.tabIndex=0;
-   const im=new Image();if(o.fotos?.[0])im.src=url(o.fotos[0]);
-   const nivel=calcularStatusSeguranca(o.valorUltimaAvaliacao,criterios);
-   const info=document.createElement("div");info.className="dash-item-info";
-   info.innerHTML=`<b>${esc(o.nome||"Sem título")}</b>${statusBadgeHtml(nivel)}<span class="meta">${esc(o.patrimonio||"Sem patrimônio")}</span><span class="meta">${esc(o.artista||"-")}</span>`;
-   row.append(im,info);row.onclick=()=>openObraInfo(o.id);listEl.append(row);
-  });
+  renderCatalogItems(document.getElementById("dashCatalogList"),lista,criterios,false);
+ } else if(dashboardStage==="semPatrimonio"){
+  const criterios=await getCriteriosStatus(),geral=dashboardVoltarDe==="filiais";
+  const fl=geral?null:filiais.find(x=>x.codigo===dashboardFilial);
+  const lista=obras.filter(o=>registradaSemPatrimonio(o)&&(geral||efetivoLocal(o).filial===dashboardFilial)).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
+  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn3">← ${geral?"Painéis":esc(fl?.nome||dashboardFilial)}</button><div class="dash-total"><b>${lista.length}</b><span>registrada(s) sem nº de patrimônio${geral?"":" em "+esc(fl?.nome||dashboardFilial)}</span></div><div class="dash-catalog" id="dashCatalogList"></div>`;
+  document.getElementById("dashBackBtn3").onclick=()=>{dashboardStage=geral?"filiais":"locais";renderDashboard()};
+  renderCatalogItems(document.getElementById("dashCatalogList"),lista,criterios,true);
+ } else if(dashboardStage==="registroLista"){
+  const criterios=await getCriteriosStatus(),geral=dashboardVoltarDe==="filiais";
+  const fl=geral?null:filiais.find(x=>x.codigo===dashboardFilial);
+  const rotulos={reg:"registrada(s)",nao:"não registrada(s)",sel:"a selecionar"};
+  const lista=obras.filter(o=>classeRegistro(o)===dashboardFiltroRegistro&&(geral||efetivoLocal(o).filial===dashboardFilial)).sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
+  const tabs=[["reg","Registradas"],["nao","Não registradas"],["sel","A selecionar"]].map(([k,l])=>`<button type="button" data-filtro="${k}" class="${k===dashboardFiltroRegistro?"on":""}">${l}</button>`).join("");
+  dashboardRoot.innerHTML=`<button type="button" class="dash-back" id="dashBackBtn4">← ${geral?"Painéis":esc(fl?.nome||dashboardFilial)}</button><div class="seg-toggle reg-tabs" role="group" aria-label="Filtrar por registro">${tabs}</div><div class="dash-total"><b>${lista.length}</b><span>obra(s) ${rotulos[dashboardFiltroRegistro]}${geral?" no acervo":" em "+esc(fl?.nome||dashboardFilial)}</span></div><div class="dash-catalog" id="dashCatalogList"></div>${lista.length?"":`<p class="empty">Nenhuma obra nesta categoria.</p>`}`;
+  document.getElementById("dashBackBtn4").onclick=()=>{dashboardStage=geral?"filiais":"locais";renderDashboard()};
+  document.querySelectorAll(".reg-tabs button").forEach(b=>b.onclick=()=>{dashboardFiltroRegistro=b.dataset.filtro;renderDashboard()});
+  renderCatalogItems(document.getElementById("dashCatalogList"),lista,criterios,true);
  }
 }
 

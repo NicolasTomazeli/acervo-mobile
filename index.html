@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+<div class="appbar">
 <header class="topbar">
   <div class="brandmark">
     <div class="brand-dot">LBV</div>
@@ -20,6 +21,14 @@
   </div>
   <button id="installBtn" class="install-btn">Instalar app</button>
 </header>
+<nav class="tab-nav" aria-label="Abas">
+  <button class="nav active" data-view="acervo"><span>🖼️</span><b>Acervo</b></button>
+  <button class="nav" data-view="conferir"><span>📷</span><b>Conferir</b></button>
+  <button class="nav" data-view="resultados"><span>📋</span><b>Resultados</b></button>
+  <button class="nav" data-view="paineis"><span>📊</span><b>Painéis</b></button>
+  <button class="nav" data-view="ajustes"><span>⚙️</span><b>Ajustes</b></button>
+</nav>
+</div>
 
 <main>
   <section id="view-acervo" class="view active">
@@ -170,18 +179,12 @@
 
     <div class="card">
       <h3>Versão</h3>
-      <p class="muted">Acervo Mobile <b>0.5.7</b> — correção da importação com fórmulas + gráficos nos Painéis.</p>
+      <p class="muted">Acervo Mobile <b>0.5.8</b> — abas fixas no topo + dashboard de registro, top 10 locais e obras sem patrimônio nos Painéis.</p>
     </div>
   </section>
 </main>
 
-<nav class="bottom-nav">
-  <button class="nav active" data-view="acervo"><span>🖼️</span><b>Acervo</b></button>
-  <button class="nav" data-view="conferir"><span>📷</span><b>Conferir</b></button>
-  <button class="nav" data-view="resultados"><span>📋</span><b>Resultados</b></button>
-  <button class="nav" data-view="paineis"><span>📊</span><b>Painéis</b></button>
-  <button class="nav" data-view="ajustes"><span>⚙️</span><b>Ajustes</b></button>
-</nav>
+
 
 <dialog id="artworkDialog">
   <form id="artworkForm" class="dialog-card">
